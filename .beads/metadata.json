@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "DanwayEME",
+  "project_id": "daaae714-a7c4-43c3-999d-b84f342af995"
+}
