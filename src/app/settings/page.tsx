@@ -14,10 +14,21 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Settings, Moon, Clock, Save, CalendarRange, CalendarDays, Trash2, Plus } from "lucide-react";
+import { Loader2, Settings, Moon, Clock, Save, CalendarRange, CalendarDays, Trash2, Plus, Database, AlertTriangle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format, parseISO } from "date-fns";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface SystemSettings {
     id: string;
@@ -38,6 +49,7 @@ interface PublicHoliday {
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [isClearing, setIsClearing] = useState(false);
 
     const [siteStartTime, setSiteStartTime] = useState<string>("");
     const [lunchHours, setLunchHours] = useState<string>("1.0");
@@ -168,6 +180,23 @@ export default function SettingsPage() {
             toast.error("❌ Failed to save settings");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleClearDatabase = async () => {
+        setIsClearing(true);
+        try {
+            const res = await fetch("/api/settings/clear-database", { method: "POST" });
+            const result = await res.json();
+            if (result.success) {
+                toast.success(result.message || "Database cleared successfully!");
+            } else {
+                toast.error(result.error || "Failed to clear database");
+            }
+        } catch {
+            toast.error("Failed to connect to the server");
+        } finally {
+            setIsClearing(false);
         }
     };
 
@@ -426,8 +455,41 @@ export default function SettingsPage() {
                 </div>
             </Card>
 
+            {/* Database Management / Clear Memory */}
+            <Card className="p-6 border-red-200 bg-red-50/30">
+                <div className="flex items-center gap-2 mb-2">
+                    <Database className="h-5 w-5 text-red-600" />
+                    <h2 className="text-lg font-semibold text-red-600">Calculator Memory</h2>
+                </div>
+                <p className="text-sm text-red-600/80 mb-6">
+                    This will instantly delete all Employees, Punch Records, and Attendance data from the live database. Use this to start fresh before uploading a new calculation batch. System settings, vendors, and holidays will NOT be deleted.
+                </p>
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" className="gap-2" disabled={isClearing}>
+                            {isClearing ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+                            Clear All Calculator Memory
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete <strong>everyone's</strong> employee and attendance records from the server right now.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleClearDatabase} className="bg-red-600 hover:bg-red-700">
+                                Yes, Clear Database
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </Card>
+
             {/* Save Button */}
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-4">
                 <Button onClick={handleSave} disabled={saving} className="gap-2 px-8">
                     {saving ? (
                         <>
