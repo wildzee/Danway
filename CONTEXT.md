@@ -532,6 +532,23 @@ The project uses Vercel's automatic Next.js detection:
 
 ---
 
+### March 26, 2026 (Session 3) — Public Holiday Management & Vercel Support
+
+#### 1. Public Holiday Management System
+- **Holiday Database**: New `PublicHoliday` model added to track specific dates (e.g., Eid, National Day).
+- **Settings UI**: Added a "Public Holidays" management card in the Settings page for adding/deleting holiday dates with names.
+- **Automatic Detection**: The calculation engine now automatically checks for holidays:
+  - **Workers (`allowOvertime: true`)**: All hours worked on a holiday are routed to **EOT** (labelled with the holiday name, flagged as `HOLIDAY_WORK`).
+  - **Staff (`allowOvertime: false`)**: Attendance records are **skipped** for holiday work (0 hours recorded).
+- **Seed Data**: March 19, 20, and 21 (2026) were seeded as "Eid Al Fitr" holidays.
+
+#### 2. Vercel Deployment & Logic Refinements
+- **Build Script fix**: Updated `package.json` build command to `prisma generate && next build`. This ensures Vercel environments always have the latest Prisma client types, preventing "Property not found" errors during deployment.
+- **Null Guards**: Added strict TypeScript null-checks for `punch.employee` in the calculation engine to ensure zero runtime crashes.
+- **Vercel CLI**: Upgraded to latest version to support the new OAuth 2.0 login flow.
+
+---
+
 **Last Updated**: March 26, 2026
-**Document Version**: 1.4.0
+**Document Version**: 1.5.0
 **Maintained By**: Md Afjal Khan
