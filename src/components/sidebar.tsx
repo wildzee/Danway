@@ -12,7 +12,10 @@ import {
     Settings,
     HelpCircle,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    ClipboardList,
+    UserPlus,
+    Clock
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,13 +23,16 @@ import { Button } from "@/components/ui/button";
 const menuItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Attendance", href: "/attendance", icon: UserCheck },
+    { name: "Extra Overtime", href: "/eot", icon: Clock },
     { name: "Manpower Report", href: "/manpower", icon: BarChart3 },
-    { name: "Worker Management", href: "#", icon: Users },
+    { name: "Employee Management", href: "/employees", icon: Users },
+    { name: "Hired Employees", href: "/hired-employees", icon: UserPlus },
+    { name: "Hired Timesheet", href: "/hired-timesheet", icon: ClipboardList },
     { name: "Project Documents", href: "#", icon: FileBox },
 ];
 
 const secondaryItems = [
-    { name: "Settings", href: "#", icon: Settings },
+    { name: "Settings", href: "/settings", icon: Settings },
     { name: "Help & Support", href: "#", icon: HelpCircle },
 ];
 
@@ -36,7 +42,7 @@ export function Sidebar() {
 
     return (
         <div className={cn(
-            "flex flex-col border-r bg-background transition-all duration-300 ease-in-out",
+            "flex flex-col border-r bg-background transition-all duration-300 ease-in-out print:hidden",
             collapsed ? "w-20" : "w-64"
         )}>
             <div className="flex h-20 items-center justify-between px-4 border-b">

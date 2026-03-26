@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { ModeToggle } from "@/components/theme-toggle";
 
 export function Header() {
     const pathname = usePathname();
@@ -34,7 +35,7 @@ export function Header() {
     };
 
     return (
-        <header className="sticky top-0 z-40 w-full border-b bg-background shadow-sm">
+        <header className="sticky top-0 z-40 w-full border-b bg-background shadow-sm print:hidden">
             <div className="flex h-20 items-center px-8">
                 {/* Left Section - Title */}
                 <div className="flex items-center gap-6 flex-1">
@@ -46,25 +47,19 @@ export function Header() {
 
                 {/* Right Section - Controls */}
                 <div className="flex items-center gap-6">
+                    {/* Theme Toggle */}
+                    <ModeToggle />
+
                     {/* Notifications */}
                     <Button variant="ghost" size="icon" className="relative">
                         <Bell className="h-5 w-5" />
                         <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-red-500" />
                     </Button>
 
-                    {/* Project Selector */}
+                    {/* Project Display */}
                     <div className="hidden lg:flex flex-col gap-1 text-right">
-                        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Change Project</label>
-                        <Select defaultValue="D657">
-                            <SelectTrigger className="w-40 h-8 text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="D657">D657 - Site Daralhai</SelectItem>
-                                <SelectItem value="D658">D658 - Site Bravo</SelectItem>
-                                <SelectItem value="D659">D659 - Site Charlie</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Project</label>
+                        <div className="text-sm font-semibold">D657 Daralhai - Civil</div>
                     </div>
 
                     {/* Date Picker */}

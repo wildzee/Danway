@@ -1,314 +1,714 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { toast } from "sonner";
 import {
-    Upload, Search, Download,
-    Edit, Flag
+    Upload,
+    Download,
+    Search,
+    Edit,
+    ChevronLeft,
+    ChevronRight,
+    Users,
+    UserCheck,
+    UserX,
+    Clock,
+    Loader2,
+    Calendar as CalendarIcon,
+    Calculator,
+    AlertTriangle,
+    Check,
+    X,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
-// Sample data
-const generateSampleData = () => {
-    const departments = ["Civil", "MEP", "Finishing", "Structure", "Safety"];
-    const designations = ["Foreman", "Mason", "Carpenter", "Electrician", "Plumber", "Helper", "Welder", "Painter"];
-    const shifts = ["Day Shift", "Night Shift"];
+interface Employee {
+    id: string;
+    employeeId: string;
+    name: string;
+    designation: string;
+    shift: string;
+    project: string;
+    network: string;
+    activity: string;
+    element: string;
+    status: string;
+}
 
-    return Array.from({ length: 156 }, (_, i) => ({
-        id: `EMP${String(i + 1001).padStart(4, '0')}`,
-        name: `Worker ${i + 1}`,
-        designation: designations[Math.floor(Math.random() * designations.length)],
-        department: departments[Math.floor(Math.random() * departments.length)],
-        project: "D657",
-        shift: shifts[Math.floor(Math.random() * shifts.length)],
-        punchIn: i < 145 ? `0${6 + Math.floor(Math.random() * 2)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}` : null,
-        punchOut: i < 145 ? `1${6 + Math.floor(Math.random() * 2)}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}` : null,
-        workHours: i < 145 ? `${8 + Math.floor(Math.random() * 3)}.${Math.floor(Math.random() * 6)}` : "0.0",
-        status: i < 145 ? (i < 142 ? "Present" : "Late") : "Absent",
-        hasIssue: !Boolean(i < 145 && Math.random() > 0.1),
-    }));
-};
+interface AttendanceData {
+    employeeId: string;
+    name: string;
+    designation: string;
+    shift: string;
+    punchIn: string | null;
+    punchOut: string | null;
+    hours: number;
+    ot: number;
+    status: string;
+    needsReview?: boolean;
+    remarks?: string | null;
+}
 
 export default function AttendancePage() {
     const [searchQuery, setSearchQuery] = useState("");
-    const [selectedDepartment, setSelectedDepartment] = useState("all");
     const [selectedShift, setSelectedShift] = useState("all");
     const [selectedStatus, setSelectedStatus] = useState("all");
-    const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-    const [data] = useState(generateSampleData());
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [punchData, setPunchData] = useState<AttendanceData[]>([]);
+    const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
-    const rowsPerPage = 50;
+    const [isImportingPunch, setIsImportingPunch] = useState(false);
+    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [isCalculating, setIsCalculating] = useState(false);
+    const punchFileInputRef = useRef<HTMLInputElement>(null);
 
-    // Filter data
-    const filteredData = data.filter(row => {
-        const matchesSearch = searchQuery === "" ||
-            row.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            row.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            row.designation.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesDept = selectedDepartment === "all" || row.department === selectedDepartment;
-        const matchesShift = selectedShift === "all" || row.shift === selectedShift;
-        const matchesStatus = selectedStatus === "all" || row.status === selectedStatus;
-        return matchesSearch && matchesDept && matchesShift && matchesStatus;
+    const itemsPerPage = 10;
+
+    // Edit Mode State
+    const [editingRowId, setEditingRowId] = useState<string | null>(null);
+    const [editValues, setEditValues] = useState<{ hours: number; ot: number }>({ hours: 0, ot: 0 });
+
+    // Fetch employees on mount
+    useEffect(() => {
+        fetchEmployees();
+    }, []);
+
+    // Fetch attendance data when date changes
+    useEffect(() => {
+        fetchAttendanceData();
+    }, [selectedDate]);
+
+    const fetchEmployees = async () => {
+        setLoading(true);
+        try {
+            const response = await fetch("/api/employees/import");
+            const result = await response.json();
+            if (response.ok && result.success) {
+                setEmployees(result.data || []);
+            }
+        } catch (error) {
+            console.error("Error fetching employees:", error);
+            toast.error("Failed to load employees");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch attendance data for selected date
+    const fetchAttendanceData = async () => {
+        setLoading(true);
+        try {
+            // Fetch all employees first
+            const employeesResponse = await fetch("/api/employees/import");
+            const employeesResult = await employeesResponse.json();
+            const allEmployees = employeesResult.data || [];
+
+            // Fetch punch records for selected date
+            const formattedDate = format(selectedDate, 'yyyy-MM-dd');
+            const punchResponse = await fetch(
+                `/api/punch/records?date=${formattedDate}`
+            );
+            const punchResult = await punchResponse.json();
+            const punchRecords = punchResult.data || [];
+
+            // Fetch attendance records for selected date
+            const attendanceResponse = await fetch(
+                `/api/attendance/records?date=${formattedDate}`
+            );
+            const attendanceResult = await attendanceResponse.json();
+            const attendanceRecords = attendanceResult?.data || [];
+
+            // ... (rest of mapping logic) ...
+
+            // Combine data for display
+            const combinedData: AttendanceData[] = allEmployees.map((emp: Employee) => {
+                const punch = punchRecords.find((p: any) => p.employee?.employeeId === emp.employeeId);
+
+                // Find attendance records for this employee
+                const normalRecord = attendanceRecords.find(
+                    (a: any) => a.employee?.employeeId === emp.employeeId && a.aaType === "0600"
+                );
+                const otRecord = attendanceRecords.find(
+                    (a: any) => a.employee?.employeeId === emp.employeeId && a.aaType === "0801"
+                );
+
+                let status = "Absent";
+
+                // If there is ANY punch or hours, they are NOT Absent
+                if (punch || normalRecord?.hours > 0) {
+                    const hours = normalRecord?.hours || 0;
+                    const punchInHour = punch?.punchIn ? parseInt(punch.punchIn.split(':')[0]) : -1;
+                    const punchInMinute = punch?.punchIn ? parseInt(punch.punchIn.split(':')[1]) : 0;
+
+                    // Check logic for specific statuses (Late/Half Day are subsets of Present, NOT Absent)
+                    if (hours > 0 && hours < 5) {
+                        status = "Half Day";
+                    } else if (punch?.punchIn) {
+                        // Late calculated if punched in after 8:00 AM for Day Shift
+                        // OR after 8:00 PM (20:00) for Night Shift
+                        const isDayShift = punchInHour >= 5 && punchInHour < 17;
+
+                        if (isDayShift && (punchInHour > 8 || (punchInHour === 8 && punchInMinute > 15))) {
+                            status = "Late";
+                        } else if (!isDayShift && (punchInHour > 20 || (punchInHour === 20 && punchInMinute > 15))) {
+                            status = "Late";
+                        } else {
+                            status = "Present";
+                        }
+                    } else {
+                        status = "Present";
+                    }
+                }
+                // Else remains "Absent" only if NO punch and NO hours
+
+                return {
+                    employeeId: emp.employeeId,
+                    name: emp.name,
+                    designation: emp.designation,
+                    shift: normalRecord?.shift || punch?.employee?.shift || emp.shift,
+                    punchIn: punch?.punchIn || null,
+                    punchOut: punch?.punchOut || null,
+                    hours: normalRecord?.hours || 0,
+                    ot: otRecord?.hours || 0,
+                    status: status,
+                    needsReview: normalRecord?.needsReview || false,
+                    remarks: normalRecord?.remarks || null,
+                };
+            });
+
+            setPunchData(combinedData);
+        } catch (error) {
+            console.error("Error fetching attendance data:", error);
+            toast.error("Failed to load attendance data");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle punch data import
+    const handlePunchImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setIsImportingPunch(true);
+
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const response = await fetch("/api/punch/upload", {
+                method: "POST",
+                body: formData,
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                const skippedCount = result.data?.skippedEmployees || 0;
+                const skippedIds = result.data?.skippedEmployeeIds || [];
+
+                if (skippedCount > 0) {
+                    // Show only first 5 employee IDs to keep message short
+                    const displayIds = skippedIds.slice(0, 5).join(', ');
+                    const remaining = skippedCount > 5 ? ` and ${skippedCount - 5} more` : '';
+
+                    toast.warning(
+                        `⚠️ Imported ${result.data?.processedCount || 0} punch records. ${skippedCount} employees skipped (not in master data): ${displayIds}${remaining}`
+                    );
+                } else {
+                    const dateRange = result.data?.dateRange;
+                    const metrics = result.data?.metrics;
+
+                    const rangeStr = dateRange?.start && dateRange?.end
+                        ? ` (${dateRange.start} to ${dateRange.end})`
+                        : '';
+
+                    const metricStr = metrics
+                        ? `\n📊 File: ${metrics.totalRowsInFile} rows. Parsed: ${metrics.validRowsParsed}. Skipped/Invalid: ${metrics.invalidRowsSkipped}.`
+                        : '';
+
+                    toast.success(
+                        `✅ Imported ${result.data?.processedCount || 0} punch records!${rangeStr}${metricStr}`
+                    );
+                }
+
+                // Auto-calculate attendance after upload (bulk)
+                if (result.data?.dateRange?.start && result.data?.dateRange?.end) {
+                    await handleCalculate({
+                        start: result.data.dateRange.start,
+                        end: result.data.dateRange.end
+                    });
+                } else {
+                    await handleCalculate();
+                }
+            } else {
+                toast.error(`❌ Import failed: ${result.error}`);
+            }
+        } catch (error) {
+            console.error("Import error:", error);
+            toast.error("❌ Failed to import punch data");
+        } finally {
+            setIsImportingPunch(false);
+            if (punchFileInputRef.current) {
+                punchFileInputRef.current.value = "";
+            }
+        }
+    };
+
+    // Handle attendance calculation
+    const handleCalculate = async (dateRange?: { start: string, end: string }) => {
+        setIsCalculating(true);
+        try {
+            const body = dateRange
+                ? { startDate: dateRange.start, endDate: dateRange.end }
+                : { date: format(selectedDate, 'yyyy-MM-dd') };
+
+            const response = await fetch('/api/attendance/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                toast.success(`✅ Calculated attendance for ${result.recordsCreated} records`);
+                await fetchAttendanceData(); // Refresh attendance data
+            } else {
+                toast.error(`❌ Calculation failed: ${result.error}`);
+            }
+        } catch (error) {
+            console.error("Calculation error:", error);
+            toast.error("❌ Failed to calculate attendance");
+        } finally {
+            setIsCalculating(false);
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setEditingRowId(null);
+        setEditValues({ hours: 0, ot: 0 });
+    };
+
+    const handleSaveEdit = async (employeeId: string) => {
+        try {
+            // Optimistic update
+            setPunchData(prev => prev.map(rec =>
+                rec.employeeId === employeeId ? { ...rec, hours: editValues.hours, ot: editValues.ot } : rec
+            ));
+
+            // Update Hours
+            await fetch('/api/attendance/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    employeeId,
+                    date: format(selectedDate, 'yyyy-MM-dd'),
+                    type: 'hours',
+                    value: editValues.hours
+                })
+            });
+
+            // Update OT
+            await fetch('/api/attendance/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    employeeId,
+                    date: format(selectedDate, 'yyyy-MM-dd'),
+                    type: 'ot',
+                    value: editValues.ot
+                })
+            });
+
+            toast.success("Updated successfully");
+            setEditingRowId(null);
+        } catch (error) {
+            console.error("Save edit error:", error);
+            toast.error("Failed to save changes");
+            fetchAttendanceData(); // Revert
+        }
+    };
+
+    // Filter data - use punchData for attendance view
+    const filteredData = punchData.filter((data) => {
+        const matchesSearch =
+            data.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            data.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            data.designation.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesShift = selectedShift === "all" || data.shift.toLowerCase() === selectedShift.toLowerCase();
+        const matchesStatus = selectedStatus === "all" || data.status.toLowerCase() === selectedStatus.toLowerCase();
+
+        return matchesSearch && matchesShift && matchesStatus;
     });
 
+    // Calculate statistics from punchData
+    const stats = {
+        total: punchData.length,
+        // Present includes everyone who is NOT absent (Present + Late + Half Day)
+        present: punchData.filter((d) => d.status !== "Absent").length,
+        absent: punchData.filter((d) => d.status === "Absent").length,
+        late: punchData.filter((d) => d.status === "Late").length,
+    };
+
     // Pagination
-    const totalPages = Math.ceil(filteredData.length / rowsPerPage);
-    const paginatedData = filteredData.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
-
-    // Status counts
-    const presentCount = data.filter(d => d.status === "Present").length;
-    const absentCount = data.filter(d => d.status === "Absent").length;
-    const lateCount = data.filter(d => d.status === "Late").length;
-
-    const handleSelectAll = (checked: boolean) => {
-        if (checked) {
-            setSelectedRows(new Set(paginatedData.map(row => row.id)));
-        } else {
-            setSelectedRows(new Set());
-        }
-    };
-
-    const handleSelectRow = (id: string, checked: boolean) => {
-        const newSelected = new Set(selectedRows);
-        if (checked) {
-            newSelected.add(id);
-        } else {
-            newSelected.delete(id);
-        }
-        setSelectedRows(newSelected);
-    };
-
-    const handleExport = () => {
-        toast.success("Report exported successfully");
-    };
-
-    const handleSubmitToSAP = () => {
-        toast.success("Data submitted to SAP");
-    };
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
 
     return (
-        <div className="flex flex-col min-h-0">
-            {/* Action Toolbar */}
-            <div className="bg-background border-b px-6 py-4">
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 flex-1">
-                        <div className="relative w-80">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search by ID, Name, or Designation"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9"
+        <div className="flex flex-col gap-6 p-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">Attendance Management</h1>
+                    <p className="text-sm text-muted-foreground">D657 Daralhai - Civil</p>
+                </div>
+                <div className="flex items-center gap-3">
+                    {/* Date Picker */}
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className="gap-2">
+                                <CalendarIcon className="h-4 w-4" />
+                                {format(selectedDate, "MMM dd, yyyy")}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="end">
+                            <Calendar
+                                mode="single"
+                                selected={selectedDate}
+                                onSelect={(date) => date && setSelectedDate(date)}
+                                initialFocus
                             />
-                        </div>
+                        </PopoverContent>
+                    </Popover>
 
-                        <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                            <SelectTrigger className="w-40">
-                                <SelectValue placeholder="All Departments" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Departments</SelectItem>
-                                <SelectItem value="Civil">Civil</SelectItem>
-                                <SelectItem value="MEP">MEP</SelectItem>
-                                <SelectItem value="Finishing">Finishing</SelectItem>
-                                <SelectItem value="Structure">Structure</SelectItem>
-                                <SelectItem value="Safety">Safety</SelectItem>
-                            </SelectContent>
-                        </Select>
+                    {/* Calculate Button */}
+                    <Button
+                        onClick={() => handleCalculate()}
+                        disabled={isCalculating}
+                        className="gap-2"
+                    >
+                        {isCalculating ? (
+                            <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Calculating...
+                            </>
+                        ) : (
+                            <>
+                                <Calculator className="h-4 w-4" />
+                                Calculate
+                            </>
+                        )}
+                    </Button>
 
-                        <Select value={selectedShift} onValueChange={setSelectedShift}>
-                            <SelectTrigger className="w-32">
-                                <SelectValue placeholder="All Shifts" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Shifts</SelectItem>
-                                <SelectItem value="Day Shift">Day Shift</SelectItem>
-                                <SelectItem value="Night Shift">Night Shift</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                            <SelectTrigger className="w-32">
-                                <SelectValue placeholder="All Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="Present">Present</SelectItem>
-                                <SelectItem value="Absent">Absent</SelectItem>
-                                <SelectItem value="Late">Late</SelectItem>
-                                <SelectItem value="Half Day">Half Day</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <Badge variant="secondary" className="text-sm px-3 py-1">Present: {presentCount}</Badge>
-                        <Badge variant="secondary" className="text-sm px-3 py-1">Absent: {absentCount}</Badge>
-                        <Badge variant="secondary" className="text-sm px-3 py-1">Late: {lateCount}</Badge>
-
-                        <Button variant="outline" onClick={handleExport}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Export
-                        </Button>
-
-                        <Button onClick={handleSubmitToSAP}>
-                            <Upload className="mr-2 h-4 w-4" />
-                            Sync SAP
-                        </Button>
-                    </div>
+                    <input
+                        ref={punchFileInputRef}
+                        type="file"
+                        accept=".xlsx,.xls"
+                        onChange={handlePunchImport}
+                        className="hidden"
+                    />
+                    <Button
+                        onClick={() => punchFileInputRef.current?.click()}
+                        disabled={isImportingPunch}
+                        variant="outline"
+                    >
+                        {isImportingPunch ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Importing...
+                            </>
+                        ) : (
+                            <>
+                                <Upload className="mr-2 h-4 w-4" />
+                                Import Punch Data
+                            </>
+                        )}
+                    </Button>
+                    <Button variant="outline" onClick={() => {
+                        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                        window.location.href = `/api/attendance/export?date=${dateStr}`;
+                    }}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export SAP Format
+                    </Button>
                 </div>
             </div>
 
-            {/* Data Table */}
-            <div className="p-6">
-                <div className="rounded-lg border bg-background overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
+            {/* Stats Cards */}
+            <div className="grid gap-4 md:grid-cols-4">
+                <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-full bg-blue-100 p-3 dark:bg-blue-900">
+                            <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-muted-foreground">Total Employees</p>
+                            <p className="text-2xl font-bold">{stats.total}</p>
+                        </div>
+                    </div>
+                </Card>
+                <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-full bg-green-100 p-3 dark:bg-green-900">
+                            <UserCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-muted-foreground">Present</p>
+                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                {stats.present}
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+                <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-full bg-red-100 p-3 dark:bg-red-900">
+                            <UserX className="h-5 w-5 text-red-600 dark:text-red-400" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-muted-foreground">Absent</p>
+                            <p className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.absent}</p>
+                        </div>
+                    </div>
+                </Card>
+                <Card className="p-4">
+                    <div className="flex items-center gap-3">
+                        <div className="rounded-full bg-orange-100 p-3 dark:bg-orange-900">
+                            <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-muted-foreground">Late</p>
+                            <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                                {stats.late}
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Filters */}
+            <Card className="p-4">
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="relative flex-1 min-w-[250px]">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by ID, Name, or Designation"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10"
+                        />
+                    </div>
+                    <Select value={selectedShift} onValueChange={setSelectedShift}>
+                        <SelectTrigger className="w-[150px]">
+                            <SelectValue placeholder="All Shifts" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Shifts</SelectItem>
+                            <SelectItem value="Day shift">Day Shift</SelectItem>
+                            <SelectItem value="Night shift">Night Shift</SelectItem>
+                            <SelectItem value="Day&Night">Day & Night</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                        <SelectTrigger className="w-[150px]">
+                            <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="present">Present</SelectItem>
+                            <SelectItem value="absent">Absent</SelectItem>
+                            <SelectItem value="late">Late</SelectItem>
+                            <SelectItem value="half day">Half Day</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </Card>
+
+            {/* Table */}
+            <Card>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-[90px]">ID</TableHead>
+                                <TableHead className="w-[150px]">Name</TableHead>
+                                <TableHead className="w-[130px]">Designation</TableHead>
+                                <TableHead className="w-[140px]">Shift</TableHead>
+                                <TableHead className="w-[90px]">Punch In</TableHead>
+                                <TableHead className="w-[90px]">Punch Out</TableHead>
+                                <TableHead className="w-[70px]">Hours</TableHead>
+                                <TableHead className="w-[70px]">OT</TableHead>
+                                <TableHead className="w-[110px]">Status</TableHead>
+                                <TableHead className="w-[60px] text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
                                 <TableRow>
-                                    <TableHead className="w-12">
-                                        <Checkbox
-                                            checked={paginatedData.length > 0 && paginatedData.every(row => selectedRows.has(row.id))}
-                                            onCheckedChange={handleSelectAll}
-                                        />
-                                    </TableHead>
-                                    <TableHead className="w-24">ID</TableHead>
-                                    <TableHead className="w-44">Name</TableHead>
-                                    <TableHead className="w-36">Designation</TableHead>
-                                    <TableHead className="w-32">Department</TableHead>
-                                    <TableHead className="w-24">Project</TableHead>
-                                    <TableHead className="w-32">Shift</TableHead>
-                                    <TableHead className="w-28">Punch In</TableHead>
-                                    <TableHead className="w-28">Punch Out</TableHead>
-                                    <TableHead className="w-24">Work Hours</TableHead>
-                                    <TableHead className="w-28">Status</TableHead>
-                                    <TableHead className="w-16">Actions</TableHead>
+                                    <TableCell colSpan={10} className="text-center py-8">
+                                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                                        <p className="text-sm text-muted-foreground mt-2">Loading employees...</p>
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {paginatedData.map((row) => (
-                                    <TableRow
-                                        key={row.id}
-                                        className={`${selectedRows.has(row.id) ? 'border-l-4 border-l-primary bg-accent/50' : ''} ${!row.punchIn ? 'border-l-4 border-l-yellow-500' : ''}`}
-                                    >
+                            ) : filteredData.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                                        {employees.length === 0
+                                            ? "No employees found. Import employees to get started."
+                                            : "No employees match your search criteria."}
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                filteredData.map((data, index) => (
+                                    <TableRow key={`${data.employeeId}-${index}`}>
+                                        <TableCell className="font-mono text-xs">{data.employeeId}</TableCell>
+                                        <TableCell className="font-medium text-sm truncate max-w-[150px]">{data.name}</TableCell>
+                                        <TableCell className="text-xs truncate max-w-[130px]" title={data.designation}>{data.designation}</TableCell>
                                         <TableCell>
-                                            <Checkbox
-                                                checked={selectedRows.has(row.id)}
-                                                onCheckedChange={(checked) => handleSelectRow(row.id, checked as boolean)}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="font-mono text-sm">{row.id}</TableCell>
-                                        <TableCell className="font-medium">{row.name}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className="text-xs uppercase">
-                                                {row.designation}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>{row.department}</TableCell>
-                                        <TableCell>{row.project}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={row.shift === "Day Shift" ? "default" : "secondary"}>
-                                                {row.shift}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="font-mono text-sm">{row.punchIn || "-"}</TableCell>
-                                        <TableCell className="font-mono text-sm">{row.punchOut || "-"}</TableCell>
-                                        <TableCell className="font-semibold">{row.workHours}</TableCell>
-                                        <TableCell>
-                                            <Select defaultValue={row.status}>
-                                                <SelectTrigger className="w-28 h-8">
+                                            <Select defaultValue={data.shift || "Day shift"}>
+                                                <SelectTrigger className="h-8 w-[110px] text-xs">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="Present">Present</SelectItem>
-                                                    <SelectItem value="Absent">Absent</SelectItem>
-                                                    <SelectItem value="Late">Late</SelectItem>
-                                                    <SelectItem value="Half Day">Half Day</SelectItem>
+                                                    <SelectItem value="Day shift">Day Shift</SelectItem>
+                                                    <SelectItem value="Night shift">Night Shift</SelectItem>
+                                                    <SelectItem value="Day&Night">Day & Night</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </TableCell>
+                                        <TableCell className="font-mono text-xs">{data.punchIn || "--:--"}</TableCell>
+                                        <TableCell className="font-mono text-xs">
+                                            {data.punchOut ? (
+                                                data.punchOut
+                                            ) : data.punchIn ? (
+                                                <div className="flex items-center gap-1 text-orange-600">
+                                                    <AlertTriangle className="h-3 w-3" />
+                                                    <span>Missing</span>
+                                                </div>
+                                            ) : (
+                                                "--:--"
+                                            )}
+                                        </TableCell>
                                         <TableCell>
-                                            <div className="flex gap-1">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                {!row.punchIn && (
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-yellow-600">
-                                                        <Flag className="h-4 w-4" />
-                                                    </Button>
-                                                )}
+                                            {editingRowId === data.employeeId ? (
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={editValues.hours}
+                                                    onChange={(e) => setEditValues({ ...editValues, hours: parseFloat(e.target.value) || 0 })}
+                                                    className="h-8 w-16 px-1 py-0 text-xs font-mono text-center border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white"
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <span className="font-mono text-xs font-semibold">{data.hours > 0 ? data.hours : "--"}</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {editingRowId === data.employeeId ? (
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={editValues.ot}
+                                                    onChange={(e) => setEditValues({ ...editValues, ot: parseFloat(e.target.value) || 0 })}
+                                                    className="h-8 w-16 px-1 py-0 text-xs font-mono text-center text-orange-600 border-orange-500 focus:ring-1 focus:ring-orange-500 bg-white"
+                                                />
+                                            ) : (
+                                                <span className="font-mono text-xs font-semibold text-orange-600">{data.ot > 0 ? data.ot : "--"}</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                <div className={`h-2 w-2 rounded-full ${data.status === "Present" ? "bg-green-600" :
+                                                    data.status === "Absent" ? "bg-red-600" :
+                                                        data.status === "Late" ? "bg-orange-600" :
+                                                            data.status === "Half Day" ? "bg-yellow-600" : "bg-gray-600"
+                                                    }`} />
+                                                <span className={`text-xs font-medium ${data.status === "Present" ? "text-green-700" :
+                                                    data.status === "Absent" ? "text-red-700" :
+                                                        data.status === "Late" ? "text-orange-700" :
+                                                            data.status === "Half Day" ? "text-yellow-700" : "text-gray-700"
+                                                    }`}>
+                                                    {data.status}
+                                                </span>
                                             </div>
+
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {editingRowId === data.employeeId ? (
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                        onClick={() => handleSaveEdit(data.employeeId)}
+                                                    >
+                                                        <Check className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                        onClick={handleCancelEdit}
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 w-8 p-0 hover:bg-slate-100"
+                                                    onClick={() => {
+                                                        setEditingRowId(data.employeeId);
+                                                        setEditValues({ hours: data.hours, ot: data.ot });
+                                                    }}
+                                                >
+                                                    <Edit className="h-4 w-4 text-slate-500" />
+                                                </Button>
+                                            )}
                                         </TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </div>
-            </div>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table >
+                </div >
 
-            {/* Bottom Bar */}
-            <div className="fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg">
-                <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        {selectedRows.size > 0 && (
-                            <>
-                                <span className="text-sm text-muted-foreground">
-                                    {selectedRows.size} items selected
-                                </span>
-                                <Button variant="outline" size="sm">
-                                    Mark as Absent
-                                </Button>
-                            </>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(1)}
-                            disabled={currentPage === 1}
-                        >
-                            First
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                        >
-                            Previous
-                        </Button>
-                        <span className="text-sm px-4">
-                            Page {currentPage} of {totalPages}
-                        </span>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                        >
-                            Next
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(totalPages)}
-                            disabled={currentPage === totalPages}
-                        >
-                            Last
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        </div>
+                {/* Results Summary */}
+                {
+                    !loading && filteredData.length > 0 && (
+                        <div className="border-t px-4 py-3">
+                            <div className="text-sm text-muted-foreground">
+                                Showing {filteredData.length} {filteredData.length === 1 ? "employee" : "employees"}
+                            </div>
+                        </div>
+                    )
+                }
+            </Card >
+        </div >
     );
 }

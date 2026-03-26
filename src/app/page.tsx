@@ -15,23 +15,55 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { useEffect, useState } from "react";
+
+interface DashboardData {
+  totalManpower: number;
+  currentlyPresent: number;
+  lateArrivals: number;
+  missingPunches: number;
+  attendanceRate: number;
+  date: string;
+}
+
 export default function DashboardHome() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/dashboard');
+        const json = await res.json();
+        if (json.success) {
+          setData(json.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const displayDate = data ? new Date(data.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : "Loading...";
+
   return (
     <div className="p-8 space-y-8 max-w-[1600px] mx-auto">
       {/* Welcome Section */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Overview</h1>
-          <p className="text-muted-foreground">Welcome back! Here&apos;s what&apos;s happening at Site D657 today.</p>
+          <p className="text-muted-foreground">Welcome back! Here&apos;s what&apos;s happening at Site D658 today.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline">
             <CalendarIcon className="mr-2 h-4 w-4" />
-            February 6, 2026
+            {displayDate}
           </Button>
-          <Button>
-            <FileText className="mr-2 h-4 w-4" />
-            Daily Summary
+          <Button asChild>
+            <Link href="/manpower"><FileText className="mr-2 h-4 w-4" /> Daily Summary</Link>
           </Button>
         </div>
       </div>
@@ -44,10 +76,9 @@ export default function DashboardHome() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">156</div>
+            <div className="text-2xl font-bold">{loading ? "..." : data?.totalManpower}</div>
             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-              <TrendingUp className="h-3 w-3 text-green-500" />
-              +4 from yesterday
+              Active workforce
             </p>
           </CardContent>
         </Card>
@@ -58,8 +89,8 @@ export default function DashboardHome() {
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">145</div>
-            <p className="text-xs text-muted-foreground mt-1">93% attendance rate</p>
+            <div className="text-2xl font-bold">{loading ? "..." : data?.currentlyPresent}</div>
+            <p className="text-xs text-muted-foreground mt-1">{loading ? "..." : `${data?.attendanceRate}%`} attendance rate</p>
           </CardContent>
         </Card>
 
@@ -69,7 +100,7 @@ export default function DashboardHome() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
+            <div className="text-2xl font-bold">{loading ? "..." : data?.lateArrivals}</div>
             <p className="text-xs text-muted-foreground mt-1 text-amber-600 font-medium">Requires verification</p>
           </CardContent>
         </Card>
@@ -80,7 +111,7 @@ export default function DashboardHome() {
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
+            <div className="text-2xl font-bold">{loading ? "..." : data?.missingPunches}</div>
             <p className="text-xs text-muted-foreground mt-1 text-red-600 font-medium font-medium">Action required</p>
           </CardContent>
         </Card>

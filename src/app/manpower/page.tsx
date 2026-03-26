@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,64 +14,256 @@ import {
     Info,
     Download,
     Users,
-    Briefcase
+    Briefcase,
+    Calendar as CalendarIcon,
+    Loader2
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { format } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
-// --- Sample Data ---
+interface Employee {
+    id: string;
+    employeeId: string;
+    name: string;
+    designation: string;
+    shift: string;
+    project: string;
+    status: string;
+}
 
-const manpowerData = [
-    { id: 1, designation: "FOREMAN", dayShift: 5, nightShift: 0, absent: 0, total: 5 },
-    { id: 2, designation: "ELECTRICIAN", dayShift: 1, nightShift: 0, absent: 0, total: 1 },
-    { id: 3, designation: "PLUMBER", dayShift: 10, nightShift: 0, absent: 1, total: 11 },
-    { id: 4, designation: "MASON", dayShift: 15, nightShift: 0, absent: 0, total: 15 },
-    { id: 5, designation: "HELPER", dayShift: 15, nightShift: 0, absent: 1, total: 16 },
-    { id: 5, designation: "STEEL FIXER", dayShift: 6, nightShift: 0, absent: 0, total: 6 },
-    { id: 5, designation: "CARPENTER", dayShift: 18, nightShift: 0, absent: 1, total: 6 },
-];
+interface PunchRecord {
+    employeeId: string;
+    punchIn: string | null;
+    punchOut: string | null;
+    date: string;
+}
 
-const absentWorkers = [
-    { id: "ID-1006281", role: "Steel Fixer", status: "ABSENT", shift: "DAY" },
-    { id: "ID-1008422", role: "Civil Helper", status: "ABSENT", shift: "DAY" },
-    { id: "ID-1009105", role: "Carpenter", status: "ABSENT", shift: "DAY" },
-    { id: "ID-1007743", role: "Mason", status: "ABSENT", shift: "DAY" },
-];
+interface DesignationStats {
+    designation: string;
+    dayShift: number;
+    nightShift: number;
+    absent: number;
+    total: number;
+}
 
-const totalWorkers = 74;
-const dayShiftTotal = 70;
-const nightShiftTotal = 0;
-const absentTotal = 4;
-
-const shiftData = [
-    { name: "Day Shift", value: 70, color: "#10b981" }, // emerald-500
-    { name: "Night Shift", value: 0, color: "#64748b" }, // slate-500
-    { name: "Absent", value: 4, color: "#ef4444" }, // red-500
-];
-
-const danwayCount = 70;
-const hiredCount = 4;
+const COLORS = ["#10b981", "#64748b", "#ef4444"]; // Emerald, Slate, Red
 
 export default function ManpowerReportPage() {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [project] = useState("D657");
+    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    const [employees, setEmployees] = useState<Employee[]>([]);
+    const [punches, setPunches] = useState<PunchRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState("danway");
+    const [danwayStats, setDanwayStats] = useState<DesignationStats[]>([]);
+    const [hiredStats, setHiredStats] = useState<DesignationStats[]>([]);
+    const [danwaySummary, setDanwaySummary] = useState({ total: 0, day: 0, night: 0, absent: 0 });
+    const [hiredSummary, setHiredSummary] = useState({ total: 0, day: 0, night: 0, absent: 0 });
+    const [danwayAbsentList, setDanwayAbsentList] = useState<Employee[]>([]);
+    const [hiredAbsentList, setHiredAbsentList] = useState<Employee[]>([]);
+    
+    // Derived state based on active tab
+    const stats = activeTab === "danway" ? danwayStats : hiredStats;
+    const summary = activeTab === "danway" ? danwaySummary : hiredSummary;
+    const absentList = activeTab === "danway" ? danwayAbsentList : hiredAbsentList;
 
-    const handleExport = (type: 'excel' | 'pdf') => {
-        toast.success(`Exporting ${type === 'excel' ? 'Excel' : 'PDF'} report...`);
+    useEffect(() => {
+        fetchData();
+    }, [selectedDate]);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            // 1. Fetch Employees
+            const empRes = await fetch("/api/employees/import");
+            const empData = await empRes.json();
+            const danwayEmployees: Employee[] = (empData.data || []).map((e: any) => ({ ...e, type: 'Danway' }));
+
+            // Fetch Hired Employees
+            const hiredRes = await fetch("/api/hired-employees");
+            const hiredData = await hiredRes.json();
+            const hiredEmployees: Employee[] = (hiredData.data || []).map((e: any) => ({ ...e, type: 'Hired' }));
+
+            const allEmployees = [...danwayEmployees, ...hiredEmployees];
+
+            // 2. Fetch Punches for Date
+            const dateStr = format(selectedDate, 'yyyy-MM-dd');
+            const punchRes = await fetch(`/api/punch/records?date=${dateStr}`);
+            const punchData = await punchRes.json();
+            const dayPunches: PunchRecord[] = punchData.data || [];
+
+            setEmployees(allEmployees);
+            setPunches(dayPunches);
+
+            processStats(allEmployees, dayPunches);
+
+        } catch (error) {
+            console.error("Error fetching report data:", error);
+            toast.error("Failed to load report data");
+        } finally {
+            setLoading(false);
+        }
     };
 
+    const processStats = (emps: Employee[], punches: PunchRecord[]) => {
+        const dMap = new Map<string, DesignationStats>();
+        const hMap = new Map<string, DesignationStats>();
+        
+        const dSum = { total: 0, day: 0, night: 0, absent: 0 };
+        const hSum = { total: 0, day: 0, night: 0, absent: 0 };
+        
+        const dAbsents: Employee[] = [];
+        const hAbsents: Employee[] = [];
+
+        emps.forEach(emp => {
+            if (emp.status !== 'active') return;
+
+            // Check punch - now matching employeeId or hiredEmployeeId
+            // The API response for hiredEmployee punches has hiredEmployeeId populated
+            const punch = punches.find((p: any) => p.employeeId === emp.id || p.hiredEmployeeId === emp.id);
+
+            let shiftType = 'Absent';
+
+            if (punch && punch.punchIn) {
+                const hour = parseInt(punch.punchIn.split(':')[0]);
+                if (hour >= 5 && hour < 17) {
+                    shiftType = 'Day';
+                } else {
+                    shiftType = 'Night';
+                }
+            }
+
+            const isHired = (emp as any).type === 'Hired';
+            const sum = isHired ? hSum : dSum;
+            const mapToUse = isHired ? hMap : dMap;
+            const absentArr = isHired ? hAbsents : dAbsents;
+
+            sum.total++;
+            if (shiftType === 'Day') sum.day++;
+            else if (shiftType === 'Night') sum.night++;
+            else {
+                sum.absent++;
+                absentArr.push(emp);
+            }
+
+            const desig = emp.designation || 'Unknown';
+            if (!mapToUse.has(desig)) {
+                mapToUse.set(desig, { designation: desig, dayShift: 0, nightShift: 0, absent: 0, total: 0 });
+            }
+            const group = mapToUse.get(desig)!;
+
+            if (shiftType === 'Day') group.dayShift++;
+            else if (shiftType === 'Night') group.nightShift++;
+            else group.absent++;
+
+            group.total++;
+        });
+
+        setDanwayStats(Array.from(dMap.values()).sort((a, b) => b.total - a.total));
+        setHiredStats(Array.from(hMap.values()).sort((a, b) => b.total - a.total));
+        
+        setDanwaySummary(dSum);
+        setHiredSummary(hSum);
+        
+        setDanwayAbsentList(dAbsents);
+        setHiredAbsentList(hAbsents);
+    };
+
+    const chartData = [
+        { name: "Day Shift", value: summary.day, color: "#10b981" },
+        { name: "Night Shift", value: summary.night, color: "#64748b" },
+        { name: "Absent", value: summary.absent, color: "#ef4444" },
+    ];
+
+    const handleExport = (type: 'excel' | 'pdf') => {
+        if (type === 'pdf') {
+            window.print();
+        } else {
+            toast.success(`Exporting ${type === 'excel' ? 'Excel' : 'PDF'} report...`);
+            // TODO: Implement Excel export logic
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex h-screen items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
     return (
-        <div className="flex flex-col min-h-0 bg-slate-50/50">
+        <div className="flex flex-col min-h-0 bg-slate-50/50 print:bg-white print:h-auto print:overflow-visible">
+            <style jsx global>{`
+                @media print {
+                    @page { margin: 10mm; size: landscape; }
+                    body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background-color: white !important; }
+                    .overflow-y-auto, .h-screen, .flex-1, html, body { overflow: visible !important; height: auto !important; }
+                    ::-webkit-scrollbar { display: none; }
+                    .no-print, nav, header, aside, .print-hidden { display: none !important; }
+                    /* Force background colors */
+                    .bg-slate-50 { background-color: #f8fafc !important; }
+                    .bg-emerald-500 { background-color: #10b981 !important; }
+                    .bg-slate-500 { background-color: #64748b !important; }
+                    .bg-red-500 { background-color: #ef4444 !important; }
+                }
+            `}</style>
+
+            {/* Print Header */}
+            <div className="hidden print:block p-8 pb-4 border-b-2 border-slate-900 mb-6 bg-white">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="h-14 w-14 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold text-2xl">D</div>
+                        <div>
+                            <h1 className="text-3xl font-black text-slate-900 tracking-tight">DANWAY EME</h1>
+                            <p className="text-sm text-slate-600 font-bold uppercase tracking-widest mt-0.5">Industrial & Energy Division</p>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <h2 className="text-2xl font-bold text-slate-900 uppercase tracking-tight">Daily Manpower Report</h2>
+                        <div className="flex flex-col gap-1 mt-2">
+                            <div className="flex items-center justify-end gap-2 text-sm font-medium text-slate-600">
+                                <span>Project:</span>
+                                <span className="font-bold text-slate-900">D657 Daralhai - Civil</span>
+                            </div>
+                            <div className="flex items-center justify-end gap-2 text-sm font-medium text-slate-600">
+                                <span>Date:</span>
+                                <span className="font-bold text-slate-900">{format(selectedDate, "EEEE, MMMM d, yyyy")}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {/* Main Content */}
             <main className="max-w-[1600px] w-full mx-auto p-6 space-y-6">
 
                 {/* Page Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Manpower Report</h1>
                         <p className="text-muted-foreground">Workforce statistics and department breakdown for D657</p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                        {/* Date Picker */}
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="gap-2">
+                                    <CalendarIcon className="h-4 w-4" />
+                                    {format(selectedDate, "MMM dd, yyyy")}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="end">
+                                <Calendar
+                                    mode="single"
+                                    selected={selectedDate}
+                                    onSelect={(date) => date && setSelectedDate(date)}
+                                    initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+
                         <Button variant="outline" size="sm" onClick={() => handleExport('excel')}>
                             <FileSpreadsheet className="mr-2 h-4 w-4" />
                             Excel
@@ -79,10 +271,6 @@ export default function ManpowerReportPage() {
                         <Button variant="outline" size="sm" onClick={() => handleExport('pdf')}>
                             <FileText className="mr-2 h-4 w-4" />
                             PDF
-                        </Button>
-                        <Button size="sm">
-                            <Download className="mr-2 h-4 w-4" />
-                            Submit Report
                         </Button>
                     </div>
                 </div>
@@ -95,7 +283,7 @@ export default function ManpowerReportPage() {
                             <Users className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{totalWorkers}</div>
+                            <div className="text-2xl font-bold">{summary.total}</div>
                             <p className="text-xs text-muted-foreground">Active workforce on site</p>
                         </CardContent>
                     </Card>
@@ -105,7 +293,7 @@ export default function ManpowerReportPage() {
                             <div className="h-2 w-2 rounded-full bg-emerald-500" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{dayShiftTotal}</div>
+                            <div className="text-2xl font-bold">{summary.day}</div>
                             <p className="text-xs text-muted-foreground">Workers present today</p>
                         </CardContent>
                     </Card>
@@ -115,7 +303,7 @@ export default function ManpowerReportPage() {
                             <div className="h-2 w-2 rounded-full bg-slate-500" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{nightShiftTotal}</div>
+                            <div className="text-2xl font-bold">{summary.night}</div>
                             <p className="text-xs text-muted-foreground">Workers scheduled tonight</p>
                         </CardContent>
                     </Card>
@@ -125,7 +313,7 @@ export default function ManpowerReportPage() {
                             <AlertCircle className="h-4 w-4 text-red-500" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{absentTotal}</div>
+                            <div className="text-2xl font-bold">{summary.absent}</div>
                             <p className="text-xs text-muted-foreground">Workers absent without leave</p>
                         </CardContent>
                     </Card>
@@ -142,7 +330,7 @@ export default function ManpowerReportPage() {
                                         <CardTitle className="text-base font-bold">Workforce by Designation</CardTitle>
                                         <CardDescription>Detailed breakdown of workers by trade and shift</CardDescription>
                                     </div>
-                                    <Tabs defaultValue="danway" className="w-[300px]">
+                                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-[300px]">
                                         <TabsList className="grid w-full grid-cols-2 h-8">
                                             <TabsTrigger value="danway" className="text-xs">Danway</TabsTrigger>
                                             <TabsTrigger value="hired" className="text-xs">Hired</TabsTrigger>
@@ -163,23 +351,31 @@ export default function ManpowerReportPage() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {manpowerData.map((row) => (
-                                            <TableRow key={row.id}>
-                                                <TableCell className="text-muted-foreground font-mono text-xs py-3">{row.id}</TableCell>
-                                                <TableCell className="font-semibold text-xs py-3">{row.designation}</TableCell>
-                                                <TableCell className="text-center text-blue-600 font-bold text-xs py-3">{row.dayShift || "-"}</TableCell>
-                                                <TableCell className="text-center text-muted-foreground text-xs py-3">{row.nightShift || "-"}</TableCell>
-                                                <TableCell className="text-center text-red-500 font-bold text-xs py-3">{row.absent || "-"}</TableCell>
-                                                <TableCell className="text-right font-bold text-xs py-3 pr-6">{row.total}</TableCell>
+                                        {stats.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                                                    No data available for this date.
+                                                </TableCell>
                                             </TableRow>
-                                        ))}
+                                        ) : (
+                                            stats.map((row, index) => (
+                                                <TableRow key={row.designation}>
+                                                    <TableCell className="text-muted-foreground font-mono text-xs py-3">{index + 1}</TableCell>
+                                                    <TableCell className="font-semibold text-xs py-3">{row.designation}</TableCell>
+                                                    <TableCell className="text-center text-blue-600 font-bold text-xs py-3">{row.dayShift || "-"}</TableCell>
+                                                    <TableCell className="text-center text-muted-foreground text-xs py-3">{row.nightShift || "-"}</TableCell>
+                                                    <TableCell className="text-center text-red-500 font-bold text-xs py-3">{row.absent || "-"}</TableCell>
+                                                    <TableCell className="text-right font-bold text-xs py-3 pr-6">{row.total}</TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
                                         {/* Total Row */}
                                         <TableRow className="bg-slate-50/50 font-bold border-t-2">
                                             <TableCell className="text-xs uppercase tracking-wider py-4" colSpan={2}>Total</TableCell>
-                                            <TableCell className="text-center text-blue-700 text-sm py-4">{dayShiftTotal}</TableCell>
-                                            <TableCell className="text-center text-slate-500 text-sm py-4">0</TableCell>
-                                            <TableCell className="text-center text-red-600 text-sm py-4">{absentTotal}</TableCell>
-                                            <TableCell className="text-right text-slate-900 text-base py-4 pr-6">{totalWorkers}</TableCell>
+                                            <TableCell className="text-center text-blue-700 text-sm py-4">{summary.day}</TableCell>
+                                            <TableCell className="text-center text-slate-500 text-sm py-4">{summary.night}</TableCell>
+                                            <TableCell className="text-center text-red-600 text-sm py-4">{summary.absent}</TableCell>
+                                            <TableCell className="text-right text-slate-900 text-base py-4 pr-6">{summary.total}</TableCell>
                                         </TableRow>
                                     </TableBody>
                                 </Table>
@@ -201,7 +397,7 @@ export default function ManpowerReportPage() {
                                         <ResponsiveContainer width="100%" height="100%">
                                             <PieChart>
                                                 <Pie
-                                                    data={shiftData}
+                                                    data={chartData}
                                                     cx="50%"
                                                     cy="50%"
                                                     innerRadius={55}
@@ -210,7 +406,7 @@ export default function ManpowerReportPage() {
                                                     dataKey="value"
                                                     strokeWidth={0}
                                                 >
-                                                    {shiftData.map((entry, index) => (
+                                                    {chartData.map((entry, index) => (
                                                         <Cell key={`cell-${index}`} fill={entry.color} />
                                                     ))}
                                                 </Pie>
@@ -219,7 +415,7 @@ export default function ManpowerReportPage() {
                                         </ResponsiveContainer>
                                         {/* Center Text */}
                                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                            <span className="text-2xl font-bold leading-none">{totalWorkers}</span>
+                                            <span className="text-2xl font-bold leading-none">{summary.total}</span>
                                             <span className="text-[10px] uppercase text-muted-foreground font-medium mt-1">Total</span>
                                         </div>
                                     </div>
@@ -230,21 +426,21 @@ export default function ManpowerReportPage() {
                                             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 mt-1" />
                                             <div>
                                                 <p className="text-[10px] uppercase text-muted-foreground font-bold">Day Shift</p>
-                                                <p className="text-sm font-bold">{dayShiftTotal} Workers ({Math.round((dayShiftTotal / totalWorkers) * 100)}%)</p>
+                                                <p className="text-sm font-bold">{summary.day} Workers ({summary.total > 0 ? Math.round((summary.day / summary.total) * 100) : 0}%)</p>
                                             </div>
                                         </div>
                                         <div className="flex items-start gap-2">
                                             <div className="w-2.5 h-2.5 rounded-full bg-slate-500 mt-1" />
                                             <div>
                                                 <p className="text-[10px] uppercase text-muted-foreground font-bold">Night Shift</p>
-                                                <p className="text-sm font-bold">{nightShiftTotal} Workers (0%)</p>
+                                                <p className="text-sm font-bold">{summary.night} Workers ({summary.total > 0 ? Math.round((summary.night / summary.total) * 100) : 0}%)</p>
                                             </div>
                                         </div>
                                         <div className="flex items-start gap-2">
                                             <div className="w-2.5 h-2.5 rounded-full bg-red-500 mt-1" />
                                             <div>
                                                 <p className="text-[10px] uppercase text-muted-foreground font-bold">Absent</p>
-                                                <p className="text-sm font-bold">{absentTotal} Workers ({Math.round((absentTotal / totalWorkers) * 100)}%)</p>
+                                                <p className="text-sm font-bold">{summary.absent} Workers ({summary.total > 0 ? Math.round((summary.absent / summary.total) * 100) : 0}%)</p>
                                             </div>
                                         </div>
                                     </div>
@@ -252,58 +448,27 @@ export default function ManpowerReportPage() {
                             </CardContent>
                         </Card>
 
-                        {/* Danway vs Hired */}
-                        <Card className="shadow-sm">
-                            <CardHeader className="pb-4">
-                                <CardTitle className="text-sm font-bold">Danway vs Hired</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs font-semibold">
-                                        <div className="flex items-center gap-2">
-                                            <Briefcase className="h-3.5 w-3.5 text-blue-600" />
-                                            <span>DANWAY PERSONNEL</span>
-                                        </div>
-                                        <span>{danwayCount} Workers</span>
-                                    </div>
-                                    <Progress value={(danwayCount / totalWorkers) * 100} className="h-2" />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs font-semibold">
-                                        <div className="flex items-center gap-2">
-                                            <Users className="h-3.5 w-3.5 text-emerald-600" />
-                                            <span>HIRED MANPOWER</span>
-                                        </div>
-                                        <span>{hiredCount} Workers</span>
-                                    </div>
-                                    <div className="h-2 w-full bg-emerald-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${(hiredCount / totalWorkers) * 100}%` }} />
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
                         {/* Absent List */}
-                        <Card className="shadow-sm border-l-4 border-l-red-500 bg-red-50/20">
+                        <Card className="shadow-sm border-l-4 border-l-red-500 bg-red-50/20 max-h-[400px] overflow-y-auto">
                             <CardHeader className="pb-2">
                                 <div className="flex items-center gap-2">
                                     <AlertCircle className="h-5 w-5 text-red-600" />
-                                    <CardTitle className="text-sm font-bold text-red-700">Absent Today</CardTitle>
+                                    <CardTitle className="text-sm font-bold text-red-700">Absent Today ({absentList.length})</CardTitle>
                                 </div>
                             </CardHeader>
                             <CardContent>
                                 <ul className="space-y-2">
-                                    {absentWorkers.map((worker) => (
-                                        <li key={worker.id} className="text-xs font-medium text-red-900 flex items-center gap-2">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                                            <span className="font-bold">{worker.id}</span> - {worker.role}
-                                        </li>
-                                    ))}
+                                    {absentList.length === 0 ? (
+                                        <li className="text-xs text-muted-foreground">No absent workers</li>
+                                    ) : (
+                                        absentList.map((worker) => (
+                                            <li key={worker.id} className="text-xs font-medium text-red-900 flex items-center gap-2">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                                                <span className="font-bold">{worker.employeeId}</span> - {worker.name} ({worker.designation})
+                                            </li>
+                                        ))
+                                    )}
                                 </ul>
-                                <Button variant="link" className="text-red-700 h-auto p-0 text-xs font-bold mt-3">
-                                    View Full List
-                                </Button>
                             </CardContent>
                         </Card>
 
@@ -317,11 +482,11 @@ export default function ManpowerReportPage() {
                         <div>
                             <h4 className="text-sm font-bold text-amber-800 mb-1">Remarks & Notifications</h4>
                             <p className="text-xs font-medium text-amber-700 leading-relaxed">
-                                ID - 1008405 - WORKING ON D636 TEMP., FROM D657. Attendance for D636 will be manually synchronized.
+                                Manpower report generated automatically based on daily punch records.
                             </p>
                         </div>
                     </div>
-                    <Button variant="outline" size="sm" className="bg-white border-amber-200 text-amber-800 hover:bg-amber-100 hover:text-amber-900 text-xs font-bold whitespace-nowrap">
+                    <Button variant="outline" size="sm" className="bg-white border-amber-200 text-amber-800 hover:bg-amber-100 hover:text-amber-900 text-xs font-bold whitespace-nowrap print:hidden">
                         ADD REMARK
                     </Button>
                 </div>

@@ -6,7 +6,7 @@
 **Type**: Employee Management & Reporting Dashboard  
 **Status**: ✅ Live in Production  
 **Created**: February 2026  
-**Last Updated**: February 8, 2026
+**Last Updated**: March 26, 2026
 
 ### Purpose
 DanwayEME is a web-based employee management system designed to streamline attendance tracking and manpower reporting for organizations. The application provides real-time insights into workforce data through an intuitive, modern interface.
@@ -316,6 +316,222 @@ The project uses Vercel's automatic Next.js detection:
 
 ---
 
-**Last Updated**: February 8, 2026  
-**Document Version**: 1.0  
+## 📅 Recent Updates (Feb 14-15, 2026)
+
+### Attendance System Enhancements
+- **Timezone Fix**: Implemented strict UTC date handling across Excel parser and all API endpoints to prevent date mismatches
+- **UI Improvements**:
+  - Restored Shift dropdown selector (Day/Night/Day&Night)
+  - Restored Edit action button in attendance table
+  - Fixed "Missing" punch-out warning display
+- **Data Flow Optimization**: Removed duplicate attendance calculation from punch upload to ensure consistency
+- **Enhanced Diagnostics**:
+  - Added detailed file parsing metrics (total rows, valid rows, invalid rows)
+  - Implemented date range feedback in upload messages
+  - Created diagnostic tools for troubleshooting data issues
+
+### Business Rules Implementation
+- **Missing Punch-Out**: Records flagged for review with assumed hours (8 hours normal, 4 hours if late arrival ≥12 PM)
+- **Missing Punch-In**: Records ignored (no attendance created)
+- **Late Arrival Detection**: Automatic half-day marking for arrivals ≥12 PM
+- **Review System**: Added `needsReview`, `reviewReason`, `reviewedBy`, and `reviewedAt` fields to AttendanceRecord model
+
+### Database Schema Updates
+- Added review-related fields to `AttendanceRecord` model
+- Implemented strict date storage in UTC format
+- Enhanced import batch tracking
+
+### Attendance Logic Specifications (New - Feb 16)
+- **Shift Determination**: 
+  - Day Shift: 05:00 - 16:59
+  - Night Shift: 17:00 - 04:59
+- **Lunch Deduction**: 
+  - Standard: -1 hour from gross hours
+  - Exception: No deduction on Sundays
+- **Overtime Rules**:
+  - **Staff/Engineers**: No Overtime (Fixed salary)
+  - **Workers**: 
+    - Normal Days: Hours > 8 are OT
+    - Sundays: All hours are OT
+- **Continuous Work**:
+  - Detected when Punch Out is missing AND next day Punch In < 07:00
+  - Action: auto-generates 10h shift (8N + 2OT) for both days
+  - Status: Flagged for Review
+  - **Day & Night Detection**:
+    - Automatically assigns "Day&Night" shift if work span crosses significant boundaries (e.g., start in Day, end past 20:00)
+    - Prioritized in UI display over Employee Master shift data
+
+### Global Application State (New - Feb 16)
+- **DateContext**: 
+  - Single source of truth for `selectedDate` application-wide
+  - Provides `useDate()` hook consumed by Header (Setter) and Page components (Getters)
+  - Eliminates prop drilling and inconsistent state between views
+
+### Export Integration (New - Feb 16)
+- **SAP Attendance Format**:
+  - Implemented backend API `/api/attendance/export` using `xlsx`
+  - Generates binary Excel stream with strictly ordered columns
+  - Maps internal schema (AttendanceRecord) to legacy SAP requirements
+  - Supports dynamic date filtering per export request
+
+### Attendance Status Architecture (Fixed - Feb 16)
+- **Status is Derived**: 
+  - **Present**: Default if punch exists or hours > 0.
+  - **Late**: Punch In > 08:15 (Day) or > 20:15 (Night).
+  - **Half Day**: Worked Hours < 5.
+  - **Absent**: No punch and 0 hours.
+  - It is **NOT** a stored field that can be directly toggled.
+- **UI Implication**:
+  - The "Status" column in Attendance Page is **Read-Only**.
+  - Users affect status by editing **Hours** (e.g., adding 8h manually makes status "Present").
+  - Dropdowns for status selection were removed to prevent user confusion.
+
+### Attendance Logic Refinements (Feb 17)
+- **Continuous Work Threshold**: 
+  - Changed cut-off from 07:00 AM to **05:00 AM**.
+  - Prevents normal early arrivals (e.g. 06:25 AM) from triggering "Overnight Shift" logic if previous punch-out is missing.
+- **Stats Calculation**:
+  - "Present" count now includes **Late** and **Half Day** employees (Active workforce).
+  - "Absent" strictly counts those with NO records.
+  - "Late" is tracked separately but considered a subset of Present.
+
+### Reporting Features (Feb 17)
+- **Manpower Report PDF**:
+  - Implemented high-fidelity **Print-to-PDF** using native browser engine.
+  - Custom print styling hides Sidebar, Navigation, and interactive elements.
+  - Adds a professional "Report Header" (Logo, Project, Date) only visible on print.
+  - Landscape orientation enforced via CSS `@page`.
+
+### February 22, 2026 - Hired Timesheet Integration
+
+#### 1. Hired Employee Timesheet Module
+- **Hired Timesheet Interface**: Designed and integrated a comprehensive monthly timesheet table specifically for Vendor "Hired Employees".
+- **Biometric Punch Integration**: Extended facepunch import logic to associate orphan punch records with Hired Employees dynamically.
+- **Dynamic Hour Calculation**:
+  - Automatically translates raw `.dat` punch records into daily hours for hired workers.
+  - **Missed Punch Rule**: If a worker has a punch-in but no punch-out (or vice versa), the system auto-assigns **5 hours** and flags the cell green.
+- **Interactive UI**:
+  - Implemented optimistic updates for lightning-fast manual hour editing by Timekeepers.
+  - Supports quick status inputs like 'A' (Absent) and 'H' (Holiday).
+  
+#### 2. Backend API & Database
+- **Schema Updates**: Added the `HiredTimesheet` model and updated relations for `PunchRecord` to conditionally map `hiredEmployeeId`.
+- **Timezone Offset Fix**: Secured the database's date rendering by switching `toISOString` conversions to manual local-date string building, preventing dates from "shifting" backwards by a day across the stack.
+
+#### 3. Bug Fixes & Stability
+- **Attendance Calculation Crash**: Fixed a critical server crash in the attendance calculation engine caused by processing "Hired Employee" punch data alongside regular Danway staff. Added strict null-checks and filtering to logically isolate the two systems despite sharing the biometric punch table.
+
+---
+
+### February 23, 2026 - Settings Page, Ramadan & OT Control
+
+#### 1. Settings Page (`/settings`)
+- **New dedicated Settings page** linked from Sidebar.
+- **Lunch Hour Deduction** (General):
+  - Selectable: **2 Hours / 1 Hour / 30 Minutes**
+  - Applied globally on all non-Sunday working days.
+- **Ramadan Period Configuration**:
+  - Enable/Disable toggle with animated switch.
+  - Configurable **Ramadan Start** and **Ramadan End** dates via calendar pickers.
+  - Separate **Ramadan Lunch Deduction**: 1 Hour / 30 Min / No Deduction (independent of normal lunch).
+  - Visual rules summary shown when Ramadan mode is active.
+- **Persistent storage** via `SystemSettings` singleton in the database.
+
+#### 2. Ramadan Calculation Rules (Engine)
+- **Weekdays during Ramadan** (employees with OT allowed):
+  - Minimum **8 Normal hours** guaranteed regardless of actual hours worked.
+  - +**2 OT hours** added on top (Workers only).
+- **Weekdays during Ramadan** (employees with OT disabled):
+  - Only the **8h floor** is guaranteed, no OT bonus.
+- **Sundays during Ramadan**: No Ramadan bonus. Standard Sunday rules apply (all hours = OT, no lunch deduction).
+
+#### 3. Per-Employee OT Control
+- **New `allowOvertime` field** added to `Employee` model (DB schema updated).
+- **Add/Edit Employee dialog** now includes an **Allow Overtime** toggle:
+  - Selecting **Staff** type auto-defaults OT to **OFF**.
+  - Selecting **Worker** type auto-defaults OT to **ON**.
+  - Can be overridden per individual employee.
+- **Employee table** shows **OT ✓ / No OT** badge for each employee at a glance.
+- **Calculation engine** now uses `allowOvertime` instead of `isEngineer`:
+  - `allowOvertime = false` → always capped at **8 Normal hours**, no OT ever, no Ramadan OT bonus.
+  - `allowOvertime = true` → standard OT rules apply (hours > 8 split as OT, Sunday all-OT, Ramadan bonus).
+
+#### 4. Schema Changes
+- Added `SystemSettings` model (singleton, `id = "global"`): `lunchHours`, `ramadanLunchHours`, `ramadanActive`, `ramadanStart`, `ramadanEnd`.
+- Added `allowOvertime Boolean @default(true)` to `Employee` model.
+
+---
+
+### March 9, 2026 - Database Maintenance Scripts
+
+#### 1. Data Clearing Utilities
+- **`clear-punch-records.ts`**: Script to bulk-delete raw biometric punch imports (`PunchRecord` table).
+- **`clear-attendance-records.ts`**: Script to bulk-delete processed daily attendance records (`AttendanceRecord`) and manual vendor timesheets (`HiredTimesheet`).
+- Both scripts can be safely executed using `npx tsx <script-name>.ts` to clean imported/calculated data without wiping the main database setup (Employees, Settings).
+
+---
+
+### March 26, 2026 - Extra Overtime (EOT) Implementation
+
+#### 1. EOT Calculation Separation
+- **2-Hour Cap**: Standard Overtime (`OT`) is strictly capped at **2 hours** per day.
+- **EOT Bucket**: Any work hours beyond the 8-hour normal floor and 2-hour OT cap are automatically split into a new bucket internal marked as `aaType: "EOT"`.
+- **Sunday Rule**: If an OT-eligible employee works on a Sunday, 100% of their hours are directed entirely to EOT (0 normal, 0 OT).
+- **Ramadan Rule**: Ramadan bonuses are applied ONLY to the standard OT bucket. The EOT calculation applies solely to actual hours worked beyond 10 hours.
+
+#### 2. EOT Approval Workflow & UI (`/eot`)
+- **Dedicated Page**: A new Extra Overtime page tracks all EOT records.
+- **Auto-Pending**: System-calculated EOT Records defaults to `needsReview: true` so Timekeepers can oversee all exceptional hours.
+- **Bulk & Single Reject**: EOT records can be permanently deleted from the database using single-row Trash icons or bulk-rejected via checkboxes.
+- **Bulk Approve**: Approving sets `needsReview` to false, clearing them from the pending query.
+
+#### 3. Manual Add & Inline Editing
+- **Smart Combobox**: Added a Shadcn `Command` dropdown for searching Employee IDs/Names instantly when manually injecting EOT.
+- **Inline Editing**: Double-click or hit the pencil icon to edit `hours` and `remarks` for any EOT record directly inside the table.
+- **Audit Badges**: Manually created EOT records are tagged with a `Manual` badge in the remarks so it remains transparent how the hours entered the system.
+
+#### 4. EOT SAP Export
+- **Dedicated Export**: Instead of mingling with regular attendance, approved EOT can be exported individually to Excel (`/api/eot/export`).
+- **SAP Compliance**: The system stores EOT internally as `aaType: "EOT"`, but maps it back to the SAP-required legacy code `0801` when the Excel is instantiated. Only mathematically "Approved" (needsReview: false) records make their way into the Excel packet.
+
+---
+
+### March 26, 2026 (Session 2) — EOT & Calculation Engine Refinements
+
+#### 1. Overnight Punch Stitching Fixes
+- **Smarter Stitching Guard**: The night-shift stitching engine now only "steals" the next day's early punch-in if that next day record **has no punch-out of its own**. This prevents an employee who forgot to punch out (e.g., March 23) from causing the system to absorb the start of their next normal day shift (March 24) as an overnight extension, generating phantom EOT.
+- **24-Hour Gross Hours**: Fixed a bug where a stitched shift (Day 1 punch-in → Day 2 punch-in) calculated ~16 minutes instead of 24+ hours. The `calculateHours` utility now correctly adds 24h when the out-time is earlier than the in-time on a stitched overnight record.
+
+#### 2. Day&Night Shift Classification Fix
+- **Tightened Threshold**: `determineShift()` previously classified any Day-shift worker leaving after **8 PM** as `Day&Night`. This caused employees working afternoon → evening (e.g., 11:34 AM – 9:30 PM) to receive a double lunch deduction (Day 0.5h + Night 1.0h) and have all hours incorrectly routed to EOT.
+- **New Rule**: `Day&Night` is only assigned when a Day-shift worker extends **past midnight** (out time `< 05:00`). Normal late-day OT stays classified as `Day shift`.
+
+#### 3. Late Arrival Rule Removed
+- Removed the rule that forced anyone punching in after 12 PM into a Half Day regardless of hours worked. Status is now determined purely from net worked time:
+  - **< 7.5 Net Hours** → Half Day (4h)
+  - **≥ 7.5 Net Hours** → Full Day (8h + OT/EOT as applicable)
+
+#### 4. EOT Page — Date Range Picker
+- Replaced the single-date picker with a **two-month range calendar**.
+- All operations (View, Calculate EOT, Export to SAP) are now **range-aware**.
+- **Calculate EOT button** added directly on the EOT page — no need to navigate to the Attendance page first.
+
+#### 5. EOT Data Table — Date Column Added
+- **Date** column added as the first column in the EOT records table, showing `MMM DD, YYYY`.
+
+#### 6. EOT SAP Excel Export — Column Changes
+- **Date moved to Column A** (far left).
+- **Removed**: `Day shift / Night Shift` and `Mobile no.` columns.
+- **Filename format** for range exports: `D657-SAP EOT-YYYY-MM-DD_to_YYYY-MM-DD.xlsx`.
+
+#### 7. Ramadan Timezone Fix
+- Ramadan start/end are saved at **12:00 PM UTC**, preventing the dates from shifting forward by one day for UAE (UTC+4) users.
+
+#### 8. Bulk Editing on EOT Page
+- **Bulk Edit dialog**: Select multiple EOT records and update Hours and/or Remarks in one action.
+
+---
+
+**Last Updated**: March 26, 2026
+**Document Version**: 1.4.0
 **Maintained By**: Md Afjal Khan

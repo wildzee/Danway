@@ -1,0 +1,199 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+// Vendors (Companies) for external hired manpower
+model Vendor {
+  id                  String   @id @default(cuid())
+  name                String   @unique
+  code                String?
+  contactPerson       String?
+  contactNumber       String?
+  status              String   @default("active") // active/inactive
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  hiredEmployees      HiredEmployee[]
+}
+
+// Hired Employees (External Manpower)
+model HiredEmployee {
+  id                  String   @id @default(cuid())
+  employeeId          String   @unique
+  name                String
+  designation         String
+  shift               String   // "Day shift" or "Night shift"
+  
+  vendorId            String
+  vendor              Vendor   @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  
+  project             String   @default("D657")
+  status              String   @default("active") // active/inactive
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  punchRecords        PunchRecord[]
+  hiredTimesheets     HiredTimesheet[]
+}
+
+
+// Employee master data
+model Employee {
+  id                  String   @id @default(cuid())
+  employeeId          String   @unique  // e.g., "1007351"
+  name                String
+  designation         String
+  mobile              String?
+  shift               String   // "Day shift" or "Night shift"
+  isEngineer          Boolean  @default(false)
+  allowOvertime       Boolean  @default(true)   // false = capped at 8h normal, no OT ever
+  
+  // Project assignment
+  project             String   @default("D657") // e.g., "D657", "D656"
+  
+  // SAP Codes (from designation mapping)
+  network             String   // e.g., "5001323"
+  activity            String   // e.g., "0010"
+  element             String   // e.g., "0102"
+  
+  status              String   @default("active") // active/inactive
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  punchRecords        PunchRecord[]
+  attendanceRecords   AttendanceRecord[]
+}
+
+// Punch records from biometric system
+model PunchRecord {
+  id              String         @id @default(cuid())
+  
+  employeeId      String?
+  employee        Employee?      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  hiredEmployeeId String?
+  hiredEmployee   HiredEmployee? @relation(fields: [hiredEmployeeId], references: [id], onDelete: Cascade)
+  
+  date            DateTime  // Process date
+  project         String?   // e.g., "DANWAY D657"
+  punchIn     String?   // Time as string "07:02:59"
+  punchOut    String?   // Time as string "17:27:50"
+  workTime    String?   // Calculated "09:25"
+  status      String    // PR, WO, AB
+  
+  importBatchId   String  // Track which import batch
+  createdAt       DateTime  @default(now())
+  
+  @@index([employeeId, date])
+  @@index([hiredEmployeeId, date])
+}
+
+// Additional model for manual and calculated external timesheet data
+model HiredTimesheet {
+  id              String        @id @default(cuid())
+  hiredEmployeeId String
+  employee        HiredEmployee @relation(fields: [hiredEmployeeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  hours           Float?
+  status          String        @default("present") // "present", "absent", "holiday", "missed_punch"
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@unique([hiredEmployeeId, date])
+}
+
+// Calculated attendance records for SAP
+model AttendanceRecord {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  date        DateTime
+  network     String
+  activity    String
+  element     String
+  aaType      String    // "0600" or "0801"
+  hours       Float     // 8, 2, 4, etc.
+  
+  shift       String
+  remarks     String?
+  
+  needsReview    Boolean   @default(false)
+  reviewReason   String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  
+  submittedToSAP Boolean @default(false)
+  submittedAt    DateTime?
+  exportBatchId  String?
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([employeeId, date])
+}
+
+// Import batch tracking
+model ImportBatch {
+  id          String    @id @default(cuid())
+  fileName    String
+  uploadDate  DateTime  @default(now())
+  recordCount Int
+  status      String    // processing, completed, failed
+  processedBy String?   // User who uploaded
+  errorMessage String?
+}
+
+// Global application settings (singleton)
+model SystemSettings {
+  id                 String    @id @default("global")
+  lunchHours         Float     @default(1.0)   // 1.0 or 0.5 hours (normal days)
+  ramadanLunchHours  Float     @default(0.5)   // lunch deduction during Ramadan
+  ramadanActive      Boolean   @default(false)
+  ramadanStart       DateTime?
+  ramadanEnd         DateTime?
+  siteStartTime      String?   // Global site start time like "06:30"
+  updatedAt          DateTime  @updatedAt
+}
+
+// Public holidays — workers who punch on these days get all hours as EOT
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  date      DateTime // saved at 12:00 PM UTC to avoid timezone shift
+  name      String   // e.g. "Eid Al Fitr"
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+// SAP code mappings by designation
+model SAPCodeMapping {
+  id          String   @id @default(cuid())
+  designation String   @unique
+  network     String
+  activity    String
+  element     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Shift configuration
+model ShiftConfig {
+  id          String   @id @default(cuid())
+  shiftType   String   @unique // "Day shift" or "Night shift"
+  startTime   String   // "06:00"
+  endTime     String   // "17:00"
+  lunchHours  Float    @default(1.0)
+  normalHours Int      @default(8)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
