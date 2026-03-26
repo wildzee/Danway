@@ -547,8 +547,13 @@ The project uses Vercel's automatic Next.js detection:
 - **Null Guards**: Added strict TypeScript null-checks for `punch.employee` in the calculation engine to ensure zero runtime crashes.
 - **Vercel CLI**: Upgraded to latest version to support the new OAuth 2.0 login flow.
 
+#### 3. Database Migration (Neon Postgres)
+- **Database Engine**: Migrated the application from local `SQLite` to **Neon Serverless Postgres** to permanently resolve Vercel deployment crashes caused by the ephemeral Read-Only filesystem.
+- **Provider**: Updated `schema.prisma` to use `postgresql`.
+- **Environment**: Linked exactly to Vercel Storage integration for automatic environment variable injection (`POSTGRES_PRISMA_URL`).
+
 ---
 
 **Last Updated**: March 26, 2026
-**Document Version**: 1.5.0
+**Document Version**: 1.6.0
 **Maintained By**: Md Afjal Khan
