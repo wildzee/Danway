@@ -36,53 +36,49 @@ export async function POST(request: NextRequest) {
         let errorCount = 0;
         let skippedDuplicates = sapRecords.length - uniqueEmployees.size;
 
-        // Process each unique employee record
+        // Prepare payload array
+        const upsertPromises = [];
         for (const record of uniqueEmployees.values()) {
-            try {
-                // Skip if no employee ID
-                if (!record.employeeId) {
-                    errorCount++;
-                    continue;
-                }
+            if (!record.employeeId) continue;
 
-                // Check if employee exists
-                const existing = await prisma.employee.findUnique({
+            const designation = record.designation || 'WORKER';
+            const isEng = designation.toLowerCase().includes('engineer') || designation.toLowerCase().includes('manager') || designation.toLowerCase().includes('officer');
+            // By default setting OT opposite of Engineer status for initial imports
+            const allowOvertime = !isEng;
+
+            const employeeData = {
+                employeeId: record.employeeId,
+                name: record.name,
+                designation: designation,
+                mobile: record.mobile || null,
+                shift: record.shift || 'Day shift',
+                isEngineer: isEng,
+                allowOvertime: allowOvertime,
+                project: extractProjectCode('D657'), // Default project
+                network: record.network || '5001323',
+                activity: record.activity || '0010',
+                element: record.element || '0102',
+            };
+
+            upsertPromises.push(
+                prisma.employee.upsert({
                     where: { employeeId: record.employeeId },
-                });
+                    update: employeeData,
+                    create: employeeData,
+                })
+            );
+        }
 
-                const designation = record.designation || 'WORKER';
-                const isEng = designation.toLowerCase().includes('engineer') || designation.toLowerCase().includes('manager') || designation.toLowerCase().includes('officer');
-
-                const employeeData = {
-                    employeeId: record.employeeId,
-                    name: record.name,
-                    designation: designation,
-                    mobile: record.mobile || null,
-                    shift: record.shift || 'Day shift',
-                    isEngineer: isEng,
-                    project: extractProjectCode('D657'), // Default project
-                    network: record.network || '5001323',
-                    activity: record.activity || '0010',
-                    element: record.element || '0102',
-                };
-
-                if (existing) {
-                    // Update existing employee
-                    await prisma.employee.update({
-                        where: { employeeId: record.employeeId },
-                        data: employeeData,
-                    });
-                    updatedCount++;
-                } else {
-                    // Create new employee
-                    await prisma.employee.create({
-                        data: employeeData,
-                    });
-                    createdCount++;
-                }
+        // Execute in chunks to avoid overwhelming the database connection pool
+        const chunkSize = 100;
+        for (let i = 0; i < upsertPromises.length; i += chunkSize) {
+            const chunk = upsertPromises.slice(i, i + chunkSize);
+            try {
+                await Promise.all(chunk);
+                updatedCount += chunk.length; // Counting all as processed (created/updated)
             } catch (error) {
-                console.error('Error processing employee:', error);
-                errorCount++;
+                console.error(`Error processing chunk ${i}-${i + chunkSize}:`, error);
+                errorCount += chunk.length;
             }
         }
 
