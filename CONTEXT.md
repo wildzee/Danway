@@ -573,8 +573,19 @@ The project uses Vercel's automatic Next.js detection:
 - **Pooled vs Direct Connections**: Configured `prisma/schema.prisma` with both `url` (for pooled `@prisma/client` queries) and `directUrl` (for Prisma CLI migrations/pushes) to fully support the online Neon/Vercel serverless environment.
 - **GitHub Sync**: Pushed the finalized PostgreSQL schema to the `main` branch, enabling persistent online storage across all environments.
 
+### March 28, 2026 (Session 6) — Database Switcher & 413 Error Fix
+
+#### 1. Dual Database Infrastructure
+- **Dynamic Schema Switching**: Implemented `scripts/setup-db.js` which manages the Prisma `datasource` provider. The system now automatically toggles between **SQLite** (for local/Electron offline use) and **PostgreSQL** (for Vercel production use) based on the environment.
+- **Automated Lifecycle**: Injected the switcher into `package.json` hooks (`dev`, `build`, `electron:build`). This ensures local development stays offline-first while the live site remains synchronized with Neon Postgres.
+
+#### 2. Upload Limit & Error Resilience (413 Fix)
+- **Payload Increase**: Set `experimental.serverActions.bodySizeLimit` to **20MB** in `next.config.ts`.
+- **Status Handling**: Updated the frontend to specifically catch `413 Payload Too Large` responses and show a non-crashing toast notification. 
+- **JSON Parsing Safety**: Added a safety block around Response JSON parsing to gracefully handle non-JSON (HTML) error pages from hosting providers (Vercel).
+
 ---
 
 **Last Updated**: March 28, 2026
-**Document Version**: 1.8.0
+**Document Version**: 1.9.0
 **Maintained By**: Md Afjal Khan

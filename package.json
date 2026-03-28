@@ -4,11 +4,11 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
+    "dev": "node scripts/setup-db.js local && next dev",
+    "build": "node scripts/setup-db.js production && prisma generate && next build",
     "lint": "eslint",
-    "electron:dev": "ELECTRON_PORT=3132 NODE_ENV=development electron .",
-    "electron:build": "prisma generate && next build && electron-builder build --mac --win"
+    "electron:dev": "node scripts/setup-db.js local && ELECTRON_PORT=3132 NODE_ENV=development electron .",
+    "electron:build": "node scripts/setup-db.js local && prisma generate && next build && electron-builder build --mac --win"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
