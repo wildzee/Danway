@@ -615,9 +615,12 @@ export async function POST(request: NextRequest) {
             const records = calculateAttendance(punch, validNextDayPunch, punch.employee, attendanceSettings, consumedPunches);
             attendanceRecords.push(...records);
         }
+        // Collect employee IDs who had a stitched shift extending past endPeriod
+        const stitchedEmployeeIds = attendanceRecords
+            .filter(r => r.date.getTime() > endPeriod.getTime())
+            .map(r => r.employeeId);
 
-        // Transaction: Delete existing and create new (Danway employees only)
-        await prisma.$transaction([
+        const deleteOps: any[] = [
             prisma.attendanceRecord.deleteMany({
                 where: {
                     date: {
@@ -625,7 +628,37 @@ export async function POST(request: NextRequest) {
                         lte: endPeriod,
                     },
                 },
-            }),
+            })
+        ];
+
+        // Also delete the next day for specific employees who stitched into it
+        if (stitchedEmployeeIds.length > 0) {
+            const nextDayStart = new Date(endPeriod);
+            nextDayStart.setUTCDate(nextDayStart.getUTCDate() + 1);
+            nextDayStart.setUTCHours(0, 0, 0, 0);
+
+            const nextDayEnd = new Date(endPeriod);
+            nextDayEnd.setUTCDate(nextDayEnd.getUTCDate() + 1);
+            nextDayEnd.setUTCHours(23, 59, 59, 999);
+
+            deleteOps.push(
+                prisma.attendanceRecord.deleteMany({
+                    where: {
+                        date: {
+                            gte: nextDayStart,
+                            lte: nextDayEnd,
+                        },
+                        employeeId: {
+                            in: stitchedEmployeeIds
+                        }
+                    }
+                })
+            );
+        }
+
+        // Transaction: Delete existing and create new (Danway employees only)
+        await prisma.$transaction([
+            ...deleteOps,
             prisma.attendanceRecord.createMany({
                 data: attendanceRecords,
             }),
