@@ -141,8 +141,11 @@ function calculateAttendance(
     if (effectivePunchIn && effectivePunchOut) {
         const isSunday = new Date(punchRecord.date).getDay() === 0;
         const grossHours = calculateHours(effectivePunchIn, effectivePunchOut, siteStartTime, isStitched);
+        let shift = determineShift(effectivePunchIn, effectivePunchOut);
 
-        const shift = determineShift(effectivePunchIn, effectivePunchOut);
+        if (isStitched && grossHours >= 16) {
+            shift = "Day&Night";
+        }
 
         // Calculate shift-specific deductions
         // Day shift: uses configured effectiveLunchHours (e.g. 0.5 or 1.0)
