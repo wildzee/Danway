@@ -222,9 +222,26 @@ export default function AttendancePage() {
                 body: formData,
             });
 
+            if (response.status === 413) {
+                toast.error("❌ File is too large. Please upload multiple smaller files (under 4.5MB).");
+                return;
+            }
+
+            if (!response.ok) {
+                const text = await response.text();
+                let errorMsg = "Import failed";
+                try {
+                    const errorJson = JSON.parse(text);
+                    errorMsg = errorJson.error || errorJson.details || errorMsg;
+                } catch (e) {
+                    errorMsg = `Server error: ${response.status} ${response.statusText}`;
+                }
+                toast.error(`❌ ${errorMsg}`);
+                return;
+            }
+
             const result = await response.json();
 
-            if (response.ok) {
                 const skippedCount = result.data?.skippedEmployees || 0;
                 const skippedIds = result.data?.skippedEmployeeIds || [];
 
@@ -253,22 +270,16 @@ export default function AttendancePage() {
                     );
                 }
 
-                // Auto-calculate attendance after upload (bulk)
                 if (result.data?.dateRange?.start && result.data?.dateRange?.end) {
                     await handleCalculate({
                         start: result.data.dateRange.start,
                         end: result.data.dateRange.end
                     });
-                } else {
-                    await handleCalculate();
                 }
-            } else {
-                toast.error(`❌ Import failed: ${result.error}`);
-            }
-        } catch (error) {
-            console.error("Import error:", error);
-            toast.error("❌ Failed to import punch data");
-        } finally {
+            } catch (error) {
+                console.error("Import error:", error);
+                toast.error("❌ Failed to import punch data");
+            } finally {
             setIsImportingPunch(false);
             if (punchFileInputRef.current) {
                 punchFileInputRef.current.value = "";
