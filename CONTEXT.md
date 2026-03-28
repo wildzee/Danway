@@ -6,7 +6,7 @@
 **Type**: Employee Management & Reporting Dashboard  
 **Status**: ✅ Live in Production  
 **Created**: February 2026  
-**Last Updated**: March 26, 2026
+**Last Updated**: March 28, 2026
 
 ### Purpose
 DanwayEME is a web-based employee management system designed to streamline attendance tracking and manpower reporting for organizations. The application provides real-time insights into workforce data through an intuitive, modern interface.
@@ -554,6 +554,27 @@ The project uses Vercel's automatic Next.js detection:
 
 ---
 
-**Last Updated**: March 26, 2026
-**Document Version**: 1.6.0
+### March 28, 2026 (Session 4) — Bug Fixes & Data Integrity
+
+#### 1. Punch Upload Idempotency
+- **Duplicate Prevention**: Modified `/api/punch/upload` to check for existing punch records before creating new ones. If a punch exists for the same employee and date, the system now updates the existing record (merging `punchIn` and `punchOut`) instead of creating a duplicate. This ensures re-uploading the same file or uploading separate morning/evening files doesn't corrupt the data.
+
+#### 2. Continuous Shift Recalculation Fix
+- **Atomic Deletion**: Updated the attendance calculation engine to handle "stitched" shifts that overlap into the next day. When recalculating a specific date range, the system now identifies any shifts that extended into "Day 2" and atomically deletes those Day 2 records before recreating them. This prevents orphaned or duplicated EOT/Attendance rows when recalculating days individually.
+
+#### 3. Stitched Shift Classification
+- **Deduction Accuracy**: Forced shift classification to `Day&Night` for any stitched shift exceeding 16 hours. This ensures that the double lunch deduction (Day + Night) is correctly applied to 24-hour continuous work sessions, preventing inflated overtime calculations.
+
+#### 4. Database Maintenance
+- **Legacy Cleanup**: Executed a comprehensive database cleanup script that identified and merged over 1,600 duplicate punch records accumulated from previous non-idempotent imports.
+- **Global Recalculation**: Re-triggered a full-month calculation for March 2026 to ensure all records follow the new data integrity rules and merged punch timelines.
+
+#### 5. Neon Postgres Connection Pooling (Final Sync)
+- **Pooled vs Direct Connections**: Configured `prisma/schema.prisma` with both `url` (for pooled `@prisma/client` queries) and `directUrl` (for Prisma CLI migrations/pushes) to fully support the online Neon/Vercel serverless environment.
+- **GitHub Sync**: Pushed the finalized PostgreSQL schema to the `main` branch, enabling persistent online storage across all environments.
+
+---
+
+**Last Updated**: March 28, 2026
+**Document Version**: 1.8.0
 **Maintained By**: Md Afjal Khan
