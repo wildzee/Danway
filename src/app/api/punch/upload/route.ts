@@ -69,19 +69,38 @@ export async function POST(request: NextRequest) {
                     continue;
                 }
 
-                // Save punch record only (no attendance calculation here)
-                await prisma.punchRecord.create({
-                    data: {
-                        employeeId: employee ? employee.id : undefined,
-                        hiredEmployeeId: hiredEmployee ? hiredEmployee.id : undefined,
+                const existingPunch = await prisma.punchRecord.findFirst({
+                    where: {
                         date: record.processDate,
-                        punchIn: record.punchIn,
-                        punchOut: record.punchOut,
-                        workTime: record.workTime,
-                        status: record.status,
-                        importBatchId: batch.id,
-                    },
+                        ...(employee ? { employeeId: employee.id } : { hiredEmployeeId: hiredEmployee!.id }),
+                    }
                 });
+
+                if (existingPunch) {
+                    await prisma.punchRecord.update({
+                        where: { id: existingPunch.id },
+                        data: {
+                            punchIn: record.punchIn || existingPunch.punchIn,
+                            punchOut: record.punchOut || existingPunch.punchOut,
+                            workTime: record.workTime !== '00:00' ? record.workTime : existingPunch.workTime,
+                            status: record.status !== 'AB' && record.status !== 'Missing' ? record.status : existingPunch.status,
+                            importBatchId: batch.id,
+                        }
+                    });
+                } else {
+                    await prisma.punchRecord.create({
+                        data: {
+                            employeeId: employee?.id,
+                            hiredEmployeeId: hiredEmployee?.id,
+                            date: record.processDate,
+                            punchIn: record.punchIn,
+                            punchOut: record.punchOut,
+                            workTime: record.workTime,
+                            status: record.status,
+                            importBatchId: batch.id,
+                        },
+                    });
+                }
 
                 processedCount++;
             } catch (error) {
