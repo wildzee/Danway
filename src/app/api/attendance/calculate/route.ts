@@ -9,7 +9,9 @@ const calculateSchema = z.object({
 });
 
 // Helper: Determine shift based on punch range
-function determineShift(punchInTime: string, punchOutTime?: string | null): string {
+function determineShift(punchInTime: string | null, punchOutTime?: string | null): string {
+    if (!punchInTime) return "Day shift"; // Default fallback
+    
     const startHour = parseInt(punchInTime.split(':')[0]);
 
     // Base shift from start time
@@ -312,7 +314,7 @@ function calculateAttendance(
     }
 
     // Case 2: Missing punch out AND could not be stitched
-    else if (effectivePunchIn && !effectivePunchOut && nextDayPunch) {
+    else if (effectivePunchIn && !effectivePunchOut && nextDayPunch?.punchIn) {
         const nextPunchHour = parseInt(nextDayPunch.punchIn.split(':')[0]);
 
         if (nextPunchHour < 5) {

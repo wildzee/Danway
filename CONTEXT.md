@@ -586,6 +586,10 @@ The project uses Vercel's automatic Next.js detection:
 
 ---
 
-**Last Updated**: March 28, 2026
-**Document Version**: 1.9.0
+### March 31, 2026 (Session 1) — Attendance Export Refinement
+- **EOT Exclusion**: Modified the Attendance Export and Attendance Records APIs to exclude records with `aaType: "EOT"`.
+- **Logic**: This ensures that Extra Overtime is only managed and exported via the dedicated EOT page, preventing duplicate or confusing lines in the standard SAP attendance export as per user request.
+
+**Last Updated**: March 31, 2026
+**Document Version**: 1.10.0
 **Maintained By**: Md Afjal Khan

@@ -27,6 +27,9 @@ export async function GET(request: NextRequest) {
                     gte: startOfDay,
                     lte: endOfDay,
                 },
+                aaType: {
+                    not: "EOT"
+                }
             },
             include: {
                 employee: true,
