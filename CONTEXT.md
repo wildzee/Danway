@@ -590,6 +590,13 @@ The project uses Vercel's automatic Next.js detection:
 - **EOT Exclusion**: Modified the Attendance Export and Attendance Records APIs to exclude records with `aaType: "EOT"`.
 - **Logic**: This ensures that Extra Overtime is only managed and exported via the dedicated EOT page, preventing duplicate or confusing lines in the standard SAP attendance export as per user request.
 
+### March 31, 2026 (Session 2) — Hired Timesheet Sunday Work
+- **Sunday Work Enablement**: Enabled auto-calculation of working hours for Hired Employees on Sundays.
+- **Logic**: 
+  - Previously, Sundays were hardcoded as holidays for hired workers regardless of punch data. 
+  - Now, if punch records exist on Sunday, the system calculates net hours with **zero lunch deduction**, matching the standard Sunday rule for Danway employees.
+  - If no punch results are found, the day still defaults to "H" (Holiday).
+
 **Last Updated**: March 31, 2026
-**Document Version**: 1.10.0
+**Document Version**: 1.11.0
 **Maintained By**: Md Afjal Khan

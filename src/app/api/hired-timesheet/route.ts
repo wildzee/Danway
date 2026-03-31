@@ -113,26 +113,7 @@ export async function GET(request: Request) {
                 const isSunday = currentDate.getDay() === 0;
                 const dateString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-                // Priority 1: Sunday → blank/holiday
-                if (isSunday) {
-                    // Check if there's a manual override even on Sunday (user might have entered hours)
-                    const tsRecord = timesheetRecords.find((t: any) =>
-                        t.hiredEmployeeId === emp.id &&
-                        `${t.date.getUTCFullYear()}-${String(t.date.getUTCMonth() + 1).padStart(2, '0')}-${String(t.date.getUTCDate()).padStart(2, '0')}` === dateString
-                    );
-                    if (tsRecord && tsRecord.status !== "present") {
-                        // User explicitly set something on Sunday
-                        records[day] = {
-                            hours: tsRecord.status === "absent" ? "A" : (tsRecord.status === "holiday" ? "H" : tsRecord.hours),
-                            status: tsRecord.status
-                        };
-                    } else {
-                        records[day] = { hours: null, status: "holiday" };
-                    }
-                    continue;
-                }
-
-                // Priority 2: Check for manual override in HiredTimesheet table
+                // Priority 1: Check for manual override in HiredTimesheet table
                 const tsRecord = timesheetRecords.find((t: any) =>
                     t.hiredEmployeeId === emp.id &&
                     `${t.date.getUTCFullYear()}-${String(t.date.getUTCMonth() + 1).padStart(2, '0')}-${String(t.date.getUTCDate()).padStart(2, '0')}` === dateString
@@ -146,7 +127,7 @@ export async function GET(request: Request) {
                     continue;
                 }
 
-                // Priority 3: Auto-calculate from punch records
+                // Priority 2: Auto-calculate from punch records
                 const pRecords = punchRecords.filter((p: any) =>
                     p.hiredEmployeeId === emp.id &&
                     `${p.date.getUTCFullYear()}-${String(p.date.getUTCMonth() + 1).padStart(2, '0')}-${String(p.date.getUTCDate()).padStart(2, '0')}` === dateString
@@ -161,10 +142,10 @@ export async function GET(request: Request) {
                         // Calculate actual hours worked
                         const grossHours = calcTimeDiffHours(effectivePunchIn, validPunch.punchOut!);
 
-                        // Determine lunch deduction — skip if employee left before 1 PM (no lunch break taken)
+                        // Determine lunch deduction — skip if Sunday OR if employee left before 1 PM (no lunch break taken)
                         const punchOutHour = parseInt(validPunch.punchOut!.split(':')[0]);
                         const leftBeforeLunch = punchOutHour < 13;
-                        const baseLunch = isRamadanDay(currentDate) ? ramadanLunchDeduction : lunchDeduction;
+                        const baseLunch = isSunday ? 0 : (isRamadanDay(currentDate) ? ramadanLunchDeduction : lunchDeduction);
                         const lunch = leftBeforeLunch ? 0 : baseLunch;
                         const netHours = Math.max(0, grossHours - lunch);
                         // Round to nearest 0.5 using the custom rule
@@ -175,8 +156,11 @@ export async function GET(request: Request) {
                         records[day] = { hours: 5, status: "missed_punch" };
                     }
                 } else {
-                    // Priority 4: No punch, no override → Absent
-                    records[day] = { hours: "A", status: "absent" };
+                    // Priority 3: No punch, no override → Absent (or Holiday if Sunday)
+                    records[day] = { 
+                        hours: isSunday ? "H" : "A", 
+                        status: isSunday ? "holiday" : "absent" 
+                    };
                 }
             }
 
