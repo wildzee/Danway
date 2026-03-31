@@ -158,7 +158,7 @@ export async function GET(request: Request) {
                 } else {
                     // Priority 3: No punch, no override → Absent (or Holiday if Sunday)
                     records[day] = { 
-                        hours: isSunday ? "H" : "A", 
+                        hours: isSunday ? null : "A", 
                         status: isSunday ? "holiday" : "absent" 
                     };
                 }

@@ -156,7 +156,7 @@ export default function HiredTimesheet() {
                             records: {
                                 ...cloned[eIndex].records,
                                 [day]: {
-                                    hours: rec.status === "absent" ? "A" : (rec.status === "holiday" ? "H" : rec.hours),
+                                    hours: rec.status === "absent" ? "A" : rec.hours,
                                     status: rec.status
                                 }
                             }
@@ -367,7 +367,7 @@ export default function HiredTimesheet() {
 
                                                         if (record.status === "absent") {
                                                             cellStyle = { backgroundColor: themeColors.absent, color: themeColors.absentText };
-                                                        } else if (record.status === "holiday" || (isWeekend && !record.hours)) {
+                                                        } else if (isWeekend || record.status === "holiday") {
                                                             cellStyle = { backgroundColor: themeColors.yellow, color: '#000' };
                                                         } else if (record.status === "missed_punch") {
                                                             cellStyle = { backgroundColor: themeColors.missedPunch, color: themeColors.missedPunchText };
@@ -536,7 +536,7 @@ export default function HiredTimesheet() {
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-[2px]" style={{ backgroundColor: themeColors.yellow }}></div>
-                    <span className="text-xs font-medium text-slate-600">H: Holiday / Weekend</span>
+                    <span className="text-xs font-medium text-slate-600">Holiday / Weekend</span>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="w-3 h-3 border border-red-200 rounded-[2px]" style={{ backgroundColor: themeColors.absent }}></div>
