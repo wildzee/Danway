@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import * as XLSX from "xlsx";
+import { requireSession } from "@/lib/auth/api-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+    const { session } = result;
+
     try {
         const searchParams = request.nextUrl.searchParams;
         const startDateParam = searchParams.get("startDate");
@@ -32,15 +37,13 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Fetch attendance records that are EOT and APPROVED
+        // Fetch EOT approved records scoped to this site
         const records = await prisma.attendanceRecord.findMany({
             where: {
-                date: {
-                    gte: startOfDay,
-                    lte: endOfDay,
-                },
+                date: { gte: startOfDay, lte: endOfDay },
                 aaType: "EOT",
-                needsReview: false // ONLY APPROVED
+                needsReview: false,
+                employee: { siteId: session.siteId },
             },
             include: {
                 employee: true,
@@ -95,7 +98,7 @@ export async function GET(request: NextRequest) {
             status: 200,
             headers: {
                 "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "Content-Disposition": `attachment; filename="D657-SAP EOT-${filenameDate}.xlsx"`,
+                "Content-Disposition": `attachment; filename="${session.siteCode ?? 'SITE'}-SAP EOT-${filenameDate}.xlsx"`,
                 "Cache-Control": "no-store, max-age=0",
             },
         });

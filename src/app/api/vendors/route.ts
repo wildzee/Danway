@@ -1,7 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const vendors = await prisma.vendor.findMany({
             orderBy: { name: 'asc' }
@@ -15,7 +19,10 @@ export async function GET() {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const data = await request.json();
         const { name, code, contactPerson, contactNumber, status } = data;

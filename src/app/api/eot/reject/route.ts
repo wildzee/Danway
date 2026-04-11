@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireSession } from "@/lib/auth/api-auth";
 
 const rejectSchema = z.object({
     recordIds: z.array(z.string()).min(1, "No record IDs provided"),
 });
 
 export async function POST(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const body = await request.json();
         const validation = rejectSchema.safeParse(body);

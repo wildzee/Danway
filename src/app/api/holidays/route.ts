@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 
 // GET /api/holidays — List all public holidays
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const holidays = await prisma.publicHoliday.findMany({
             orderBy: { date: "asc" },
@@ -17,6 +21,9 @@ export async function GET() {
 // POST /api/holidays — Create a new public holiday
 // Body: { date: "YYYY-MM-DD", name: "Eid Al Fitr" }
 export async function POST(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const body = await request.json();
         const { date, name } = body;
@@ -46,6 +53,9 @@ export async function POST(request: NextRequest) {
 
 // DELETE /api/holidays?id=xxx — Delete a holiday by ID
 export async function DELETE(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const id = request.nextUrl.searchParams.get("id");
         if (!id) {

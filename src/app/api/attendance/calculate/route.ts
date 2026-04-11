@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireSession } from "@/lib/auth/api-auth";
 
 const calculateSchema = z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format").optional().nullable(),
@@ -476,6 +477,10 @@ function calculateAttendance(
 }
 
 export async function POST(request: NextRequest) {
+    const authResult = await requireSession(request);
+    if (authResult instanceof NextResponse) return authResult;
+    const { session } = authResult;
+
     try {
         const body = await request.json();
         const validation = calculateSchema.safeParse(body);
@@ -523,13 +528,16 @@ export async function POST(request: NextRequest) {
         const fetchEnd = new Date(endPeriod);
         fetchEnd.setDate(fetchEnd.getDate() + 1);
 
-        // Get all punch records for the range + 1 day
+        // Get all punch records for the range + 1 day, scoped to this site's employees
+        const siteEmployeeFilter = session.siteId
+            ? { employee: { siteId: session.siteId } }
+            : {};
+
         const allPunches = await prisma.punchRecord.findMany({
             where: {
-                date: {
-                    gte: startPeriod,
-                    lte: fetchEnd,
-                },
+                date: { gte: startPeriod, lte: fetchEnd },
+                employeeId: { not: null }, // Danway employees only (hired employees excluded)
+                ...siteEmployeeFilter,
             },
             include: {
                 employee: true,
@@ -625,13 +633,16 @@ export async function POST(request: NextRequest) {
             .filter(r => r.date.getTime() > endPeriod.getTime())
             .map(r => r.employeeId);
 
+        // Site-scoped delete: only delete records belonging to this site's employees
+        const siteDeleteFilter = session.siteId
+            ? { employee: { siteId: session.siteId } }
+            : {};
+
         const deleteOps: any[] = [
             prisma.attendanceRecord.deleteMany({
                 where: {
-                    date: {
-                        gte: startPeriod,
-                        lte: endPeriod,
-                    },
+                    date: { gte: startPeriod, lte: endPeriod },
+                    ...siteDeleteFilter,
                 },
             })
         ];

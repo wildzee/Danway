@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 
-export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const { id } = await context.params;
         const data = await request.json();
@@ -38,7 +42,10 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     }
 }
 
-export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const { id } = await context.params;
 

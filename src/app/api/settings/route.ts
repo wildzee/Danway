@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         let settings = await prisma.systemSettings.findUnique({
             where: { id: "global" },
@@ -25,6 +29,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const body = await request.json();
         const { lunchHours, ramadanLunchHours, ramadanActive, ramadanStart, ramadanEnd, siteStartTime } = body;

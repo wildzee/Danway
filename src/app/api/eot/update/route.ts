@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireSession } from "@/lib/auth/api-auth";
 
 const updateSchema = z.object({
     recordId: z.string().min(1, "Record ID is required"),
@@ -9,6 +10,9 @@ const updateSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+
     try {
         const body = await request.json();
         const validation = updateSchema.safeParse(body);

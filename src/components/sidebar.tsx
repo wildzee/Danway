@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/lib/auth/client-session";
 
 const menuItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -39,6 +40,7 @@ const secondaryItems = [
 export function Sidebar() {
     const pathname = usePathname();
     const [collapsed, setCollapsed] = useState(false);
+    const { session } = useSession();
 
     return (
         <div className={cn(
@@ -114,11 +116,11 @@ export function Sidebar() {
                 {!collapsed ? (
                     <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4">
                         <p className="text-xs font-medium text-slate-500 uppercase mb-1">Active Project</p>
-                        <p className="text-sm font-bold text-foreground">D657 - Site Alpha</p>
+                        <p className="text-sm font-bold text-foreground">{session?.siteCode ?? "—"} — {session?.siteName ?? "Loading..."}</p>
                     </div>
                 ) : (
                     <div className="flex justify-center">
-                        <div className="h-2 w-2 rounded-full bg-green-500" title="Active Project D657" />
+                        <div className="h-2 w-2 rounded-full bg-green-500" title={session?.siteCode ? `Active Project ${session.siteCode}` : "Active Project"} />
                     </div>
                 )}
             </div>

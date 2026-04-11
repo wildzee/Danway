@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 
 function getDaysInMonth(year: number, month: number) {
     return new Date(year, month, 0).getDate();
@@ -33,7 +34,11 @@ function roundHalfHour(decimalHours: number): number {
     return wholeHours;
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+    const { session } = result;
+
     try {
         const { searchParams } = new URL(request.url);
         const vendorId = searchParams.get('vendorId');
@@ -56,9 +61,9 @@ export async function GET(request: Request) {
         const ramadanEnd = settings?.ramadanEnd ? new Date(settings.ramadanEnd) : null;
         const siteStartTime = (settings as any)?.siteStartTime ?? null;
 
-        // 2. Fetch Hired Employees for this vendor
+        // 2. Fetch Hired Employees for this vendor, scoped to site
         const hiredEmployees = await prisma.hiredEmployee.findMany({
-            where: { vendorId },
+            where: { vendorId, ...(session.siteId ? { siteId: session.siteId } : {}) },
             orderBy: { name: 'asc' }
         });
 
@@ -185,7 +190,11 @@ export async function GET(request: Request) {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+    const { session } = result;
+
     try {
         const data = await request.json();
         const { hiredEmployeeId, date, hours, status } = data; // date should be YYYY-MM-DD string

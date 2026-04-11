@@ -23,44 +23,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserPlus, Users, Search, Edit, Trash2, Upload, Loader2 } from "lucide-react";
 
-// Complete designation options with SAP codes from CODE sheet
-const STAFF_DESIGNATIONS = [
-    { value: "Civil Divisional Manager", label: "Civil Divisional Manager", network: "5001323", activity: "0010", element: "0101", type: "staff" },
-    { value: "Civil Engineer", label: "Civil Engineer", network: "5001323", activity: "0010", element: "0102", type: "staff" },
-    { value: "Document Coordinator", label: "Document Coordinator", network: "5001323", activity: "0010", element: "0103", type: "staff" },
-    { value: "Office Boy", label: "Office Boy", network: "5001323", activity: "0010", element: "0107", type: "staff" },
-    { value: "Draughtsman-civil", label: "Draughtsman-civil", network: "5001323", activity: "0010", element: "0108", type: "staff" },
-    { value: "Office Assistant", label: "Office Assistant", network: "5001323", activity: "0010", element: "0110", type: "staff" },
-    { value: "NOC coordinator", label: "NOC coordinator", network: "5001323", activity: "0010", element: "0111", type: "staff" },
-    { value: "Project coordinator", label: "Project coordinator", network: "5001323", activity: "0010", element: "0112", type: "staff" },
-    { value: "Time Keeper", label: "Time Keeper", network: "5001323", activity: "0010", element: "0113", type: "staff" },
-    { value: "Surveyor", label: "Surveyor", network: "5001323", activity: "0010", element: "0117", type: "staff" },
-    { value: "LV Driver", label: "LV Driver", network: "5001323", activity: "0010", element: "0118", type: "staff" },
-    { value: "HvDriver", label: "HV Driver", network: "5001323", activity: "0010", element: "0119", type: "staff" },
-    { value: "JCB Operator", label: "JCB Operator", network: "5001323", activity: "0010", element: "0120", type: "staff" },
-    { value: "Shovvel Operator", label: "Shovvel Operator", network: "5001323", activity: "0010", element: "0121", type: "staff" },
-    { value: "Store Keeping", label: "Store Keeping", network: "5001323", activity: "0010", element: "0122", type: "staff" },
-    { value: "Safety Assistant", label: "Safety Assistant", network: "5001323", activity: "0010", element: "0123", type: "staff" },
-    { value: "Surveyor - Hired", label: "Surveyor - Hired", network: "5001323", activity: "0010", element: "0025", type: "staff" },
-];
-
-const WORKER_DESIGNATIONS = [
-    { value: "Civil Foreman", label: "Civil Foreman", network: "5001323", activity: "0132", element: "0601", type: "worker" },
-    { value: "Civil Chargehand", label: "Civil Chargehand", network: "5001323", activity: "0132", element: "0602", type: "worker" },
-    { value: "Carpenter", label: "Carpenter", network: "5001323", activity: "0132", element: "0603", type: "worker" },
-    { value: "Mason", label: "Mason", network: "5001323", activity: "0132", element: "0604", type: "worker" },
-    { value: "Steel Fixer", label: "Steel Fixer", network: "5001323", activity: "0132", element: "0605", type: "worker" },
-    { value: "Plumber", label: "Plumber", network: "5001323", activity: "0132", element: "0606", type: "worker" },
-    { value: "Painter", label: "Painter", network: "5001323", activity: "0132", element: "0607", type: "worker" },
-    { value: "Scaffolder", label: "Scaffolder", network: "5001323", activity: "0132", element: "0608", type: "worker" },
-    { value: "Electrician-civil", label: "Electrician-civil", network: "5001323", activity: "0132", element: "0609", type: "worker" },
-    { value: "Welder", label: "Welder", network: "5001323", activity: "0132", element: "0610", type: "worker" },
-    { value: "Helper", label: "Helper", network: "5001323", activity: "0132", element: "0612", type: "worker" },
-    { value: "Pumber", label: "Pumber", network: "5001323", activity: "0132", element: "0613", type: "worker" },
-    { value: "Store Keeper Assistant", label: "Store Keeper Assistant", network: "5001323", activity: "0132", element: "0614", type: "worker" },
-];
-
-const ALL_DESIGNATIONS = [...STAFF_DESIGNATIONS, ...WORKER_DESIGNATIONS];
+interface DesignationMapping {
+    designation: string;
+    network: string;
+    activity: string;
+    element: string;
+}
 
 interface Employee {
     id: string;
@@ -78,6 +46,7 @@ interface Employee {
 
 export default function EmployeesPage() {
     const [employees, setEmployees] = useState<Employee[]>([]);
+    const [designations, setDesignations] = useState<DesignationMapping[]>([]);
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -102,7 +71,7 @@ export default function EmployeesPage() {
     // Fetch employees
     const fetchEmployees = async () => {
         try {
-            const response = await fetch("/api/employees/import");
+            const response = await fetch("/api/employees");
             const data = await response.json();
             if (data.success) {
                 setEmployees(data.data || []);
@@ -112,19 +81,24 @@ export default function EmployeesPage() {
         }
     };
 
+    // Fetch designations (SAP code mappings for this site)
+    const fetchDesignations = async () => {
+        try {
+            const res = await fetch("/api/designations");
+            const data = await res.json();
+            if (data.success) setDesignations(data.data || []);
+        } catch (error) {
+            console.error("Error fetching designations:", error);
+        }
+    };
+
     useEffect(() => {
         fetchEmployees();
+        fetchDesignations();
     }, []);
 
-    // Get available designations based on employee type
-    const getAvailableDesignations = () => {
-        if (formData.isStaff === "true") {
-            return STAFF_DESIGNATIONS;
-        } else if (formData.isStaff === "false") {
-            return WORKER_DESIGNATIONS;
-        }
-        return [];
-    };
+    // Get available designations — all from the site's SAP mappings
+    const getAvailableDesignations = () => designations;
 
     // Handle employee type change - reset designation when type changes
     const handleEmployeeTypeChange = (value: string) => {
@@ -205,7 +179,7 @@ export default function EmployeesPage() {
         setIsLoading(true);
 
         try {
-            const selectedDesignation = ALL_DESIGNATIONS.find(d => d.value === formData.designation);
+            const selectedDesignation = designations.find(d => d.designation === formData.designation);
 
             const payload = {
                 employeeId: formData.employeeId,
@@ -218,7 +192,6 @@ export default function EmployeesPage() {
                 network: selectedDesignation?.network || "5001323",
                 activity: selectedDesignation?.activity || "0132",
                 element: selectedDesignation?.element || "0601",
-                project: "D657",
             };
 
             let response;
@@ -546,17 +519,17 @@ export default function EmployeesPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         {getAvailableDesignations().map((des) => (
-                                            <SelectItem key={des.value} value={des.value}>
-                                                {des.label}
+                                            <SelectItem key={des.designation} value={des.designation}>
+                                                {des.designation}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                                 {formData.designation && (
                                     <p className="text-xs text-muted-foreground font-mono">
-                                        SAP Code: {ALL_DESIGNATIONS.find(d => d.value === formData.designation)?.network}/
-                                        {ALL_DESIGNATIONS.find(d => d.value === formData.designation)?.activity}/
-                                        {ALL_DESIGNATIONS.find(d => d.value === formData.designation)?.element}
+                                        SAP Code: {designations.find(d => d.designation === formData.designation)?.network}/
+                                        {designations.find(d => d.designation === formData.designation)?.activity}/
+                                        {designations.find(d => d.designation === formData.designation)?.element}
                                     </p>
                                 )}
                             </div>

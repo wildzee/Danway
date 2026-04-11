@@ -10,7 +10,20 @@ datasource db {
   url      = "file:./dev.db"
 }
 
+// Site (Project) — each site has its own timekeeper login and SAP codes
+model Site {
+  id           String   @id @default(cuid())
+  code         String   @unique   // "D657", "D687"
+  name         String             // "Site Daralhai"
+  loginId      String   @unique   // same as code, used as login username
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
+  employees      Employee[]
+  hiredEmployees HiredEmployee[]
+  sapMappings    SAPCodeMapping[]
+}
 
 // Vendors (Companies) for external hired manpower
 model Vendor {
@@ -29,50 +42,62 @@ model Vendor {
 // Hired Employees (External Manpower)
 model HiredEmployee {
   id                  String   @id @default(cuid())
-  employeeId          String   @unique
+  employeeId          String
   name                String
   designation         String
   shift               String   // "Day shift" or "Night shift"
-  
+
   vendorId            String
   vendor              Vendor   @relation(fields: [vendorId], references: [id], onDelete: Restrict)
-  
-  project             String   @default("D657")
+
+  siteId              String   @default("")
+  site                Site     @relation(fields: [siteId], references: [id])
+
+  project             String   @default("D657") // kept for biometric punch metadata
   status              String   @default("active") // active/inactive
-  
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-  
+
   punchRecords        PunchRecord[]
   hiredTimesheets     HiredTimesheet[]
+
+  @@unique([siteId, employeeId])
+  @@index([siteId])
 }
 
 
 // Employee master data
 model Employee {
   id                  String   @id @default(cuid())
-  employeeId          String   @unique  // e.g., "1007351"
+  employeeId          String   // e.g., "1007351" — unique per site
   name                String
   designation         String
   mobile              String?
   shift               String   // "Day shift" or "Night shift"
   isEngineer          Boolean  @default(false)
   allowOvertime       Boolean  @default(true)   // false = capped at 8h normal, no OT ever
-  
-  // Project assignment
+
+  siteId              String   @default("")
+  site                Site     @relation(fields: [siteId], references: [id])
+
+  // Project assignment (kept for biometric punch metadata)
   project             String   @default("D657") // e.g., "D657", "D656"
-  
+
   // SAP Codes (from designation mapping)
   network             String   // e.g., "5001323"
   activity            String   // e.g., "0010"
   element             String   // e.g., "0102"
-  
+
   status              String   @default("active") // active/inactive
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-  
+
   punchRecords        PunchRecord[]
   attendanceRecords   AttendanceRecord[]
+
+  @@unique([siteId, employeeId])
+  @@index([siteId])
 }
 
 // Punch records from biometric system
@@ -176,15 +201,20 @@ model PublicHoliday {
   @@index([date])
 }
 
-// SAP code mappings by designation
+// SAP code mappings by designation — scoped per site
 model SAPCodeMapping {
   id          String   @id @default(cuid())
-  designation String   @unique
+  siteId      String
+  site        Site     @relation(fields: [siteId], references: [id])
+  designation String
   network     String
   activity    String
   element     String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@unique([siteId, designation])
+  @@index([siteId])
 }
 
 // Shift configuration

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 
 export async function GET(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+    const { session } = result;
+
     try {
         const searchParams = request.nextUrl.searchParams;
         const date = searchParams.get("date"); // YYYY-MM-DD string
@@ -24,10 +29,11 @@ export async function GET(request: NextRequest) {
         const targetDate = startOfDay; // For response consistency
 
         const where: any = {
-            date: {
-                gte: startOfDay,
-                lte: endOfDay,
-            },
+            date: { gte: startOfDay, lte: endOfDay },
+            OR: [
+                { employee: { siteId: session.siteId } },
+                { hiredEmployee: { siteId: session.siteId } },
+            ],
         };
 
         if (employeeId) {

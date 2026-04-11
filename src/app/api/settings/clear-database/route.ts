@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireSession } from '@/lib/auth/api-auth';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+    const result = await requireSession(request, ['admin']);
+    if (result instanceof NextResponse) return result;
+
     try {
         // Run as a transaction to ensure all or nothing deletes
         // We delete strictly calculator data. We keep Settings, Vendors, and PublicHolidays.

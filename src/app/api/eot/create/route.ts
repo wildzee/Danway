@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -10,6 +11,10 @@ const createSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+    const { session } = result;
+
     try {
         const body = await request.json();
         const validation = createSchema.safeParse(body);
@@ -23,9 +28,9 @@ export async function POST(request: NextRequest) {
 
         const { employeeId, date, hours, remarks } = validation.data;
 
-        // Verify employee exists
-        const employee = await prisma.employee.findUnique({
-            where: { employeeId }
+        // Verify employee exists within this site
+        const employee = await prisma.employee.findFirst({
+            where: { employeeId, siteId: session.siteId }
         });
 
         if (!employee) {

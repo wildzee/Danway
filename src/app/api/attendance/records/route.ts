@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth/api-auth";
 
 export async function GET(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+    const { session } = result;
+
     try {
         const searchParams = request.nextUrl.searchParams;
         const date = searchParams.get("date"); // YYYY-MM-DD string
@@ -25,13 +30,9 @@ export async function GET(request: NextRequest) {
 
         const attendanceRecords = await prisma.attendanceRecord.findMany({
             where: {
-                date: {
-                    gte: startOfDay,
-                    lte: endOfDay,
-                },
-                aaType: {
-                    not: "EOT"
-                }
+                date: { gte: startOfDay, lte: endOfDay },
+                aaType: { not: "EOT" },
+                employee: { siteId: session.siteId },
             },
             include: {
                 employee: true,
