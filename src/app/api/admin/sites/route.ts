@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/api-auth";
 import { generatePassword, hashPassword } from "@/lib/auth/password";
+import { encryptPassword, decryptPassword } from "@/lib/auth/encrypt";
 
 export async function GET(request: NextRequest) {
   const result = await requireSession(request, ["admin"]);
@@ -16,7 +17,15 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(sites);
+  // Decrypt passwords for admin display
+  const sitesWithPasswords = sites.map((s) => ({
+    ...s,
+    plainPassword: s.encryptedPassword ? decryptPassword(s.encryptedPassword) : null,
+    encryptedPassword: undefined,
+    passwordHash: undefined,
+  }));
+
+  return NextResponse.json(sitesWithPasswords);
 }
 
 export async function POST(request: NextRequest) {
@@ -40,6 +49,7 @@ export async function POST(request: NextRequest) {
 
   const plainPassword = generatePassword(10);
   const passwordHash = await hashPassword(plainPassword);
+  const encryptedPassword = encryptPassword(plainPassword);
 
   const site = await prisma.site.create({
     data: {
@@ -47,9 +57,9 @@ export async function POST(request: NextRequest) {
       name: name.trim(),
       loginId: siteCode,
       passwordHash,
+      encryptedPassword,
     },
   });
 
-  // Return plain password only once
-  return NextResponse.json({ ...site, plainPassword }, { status: 201 });
+  return NextResponse.json({ ...site, plainPassword, passwordHash: undefined, encryptedPassword: undefined }, { status: 201 });
 }

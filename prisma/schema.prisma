@@ -16,7 +16,8 @@ model Site {
   code         String   @unique   // "D657", "D687"
   name         String             // "Site Daralhai"
   loginId      String   @unique   // same as code, used as login username
-  passwordHash String
+  passwordHash      String
+  encryptedPassword String?   // AES-256 encrypted plain password for admin display
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

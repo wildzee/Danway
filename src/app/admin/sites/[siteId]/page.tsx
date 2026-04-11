@@ -16,8 +16,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Upload, RefreshCw, Copy, Check, AlertTriangle,
-  FileSpreadsheet, Users, Loader2, CloudUpload, Trash2, KeyRound, Eye, EyeOff
+  ArrowLeft, RefreshCw, Copy, Check, AlertTriangle,
+  Loader2, CloudUpload, Trash2, KeyRound, Eye, EyeOff
 } from "lucide-react";
 
 interface SAPMapping {
@@ -34,6 +34,7 @@ interface SiteDetail {
   name: string;
   loginId: string;
   createdAt: string;
+  plainPassword: string | null;
   sapMappings: SAPMapping[];
   _count: { employees: number; hiredEmployees: number };
 }
@@ -55,6 +56,7 @@ export default function SiteDetailPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [newPassword, setNewPassword] = useState<string | null>(null);
   const [copiedPw, setCopiedPw] = useState(false);
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
 
   // Set custom password dialog
   const [setPasswordOpen, setSetPasswordOpen] = useState(false);
@@ -228,7 +230,25 @@ export default function SiteDetailPage() {
           <div className="flex items-center gap-6 p-3 bg-muted rounded-lg text-sm font-mono">
             <div><span className="text-muted-foreground font-sans text-xs">Login ID</span><br />{site.loginId}</div>
             <div className="text-muted-foreground">·</div>
-            <div><span className="text-muted-foreground font-sans text-xs">Password</span><br />••••••••••</div>
+            <div className="flex items-center gap-2">
+              <div>
+                <span className="text-muted-foreground font-sans text-xs">Password</span><br />
+                {site.plainPassword
+                  ? (showCurrentPw ? site.plainPassword : "••••••••••")
+                  : <span className="text-muted-foreground italic text-xs">unknown — set a new one</span>
+                }
+              </div>
+              {site.plainPassword && (
+                <>
+                  <button className="text-muted-foreground hover:text-foreground" onClick={() => setShowCurrentPw(!showCurrentPw)}>
+                    {showCurrentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <button className="text-muted-foreground hover:text-foreground" onClick={() => copy(site.plainPassword!)}>
+                    {copiedPw ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

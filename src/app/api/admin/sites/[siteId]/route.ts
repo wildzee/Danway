@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/api-auth";
 import { generatePassword, hashPassword } from "@/lib/auth/password";
+import { encryptPassword, decryptPassword } from "@/lib/auth/encrypt";
 
 export async function GET(
   request: NextRequest,
@@ -21,7 +22,13 @@ export async function GET(
   });
 
   if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
-  return NextResponse.json(site);
+
+  return NextResponse.json({
+    ...site,
+    plainPassword: site.encryptedPassword ? decryptPassword(site.encryptedPassword) : null,
+    encryptedPassword: undefined,
+    passwordHash: undefined,
+  });
 }
 
 export async function PATCH(
@@ -38,7 +45,8 @@ export async function PATCH(
   if (action === "reset-password") {
     const plainPassword = generatePassword(10);
     const passwordHash = await hashPassword(plainPassword);
-    await prisma.site.update({ where: { id: siteId }, data: { passwordHash } });
+    const encryptedPassword = encryptPassword(plainPassword);
+    await prisma.site.update({ where: { id: siteId }, data: { passwordHash, encryptedPassword } });
     return NextResponse.json({ success: true, plainPassword });
   }
 
@@ -48,7 +56,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
     }
     const passwordHash = await hashPassword(password);
-    await prisma.site.update({ where: { id: siteId }, data: { passwordHash } });
+    const encryptedPassword = encryptPassword(password);
+    await prisma.site.update({ where: { id: siteId }, data: { passwordHash, encryptedPassword } });
     return NextResponse.json({ success: true });
   }
 

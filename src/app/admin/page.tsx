@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Building2, Users, FileSpreadsheet, ArrowRight, Trash2, AlertTriangle, Loader2 } from "lucide-react";
+import { Plus, Building2, Users, FileSpreadsheet, ArrowRight, Trash2, AlertTriangle, Loader2, Eye, EyeOff, Copy, Check } from "lucide-react";
 
 interface Site {
   id: string;
@@ -15,6 +15,7 @@ interface Site {
   name: string;
   loginId: string;
   createdAt: string;
+  plainPassword: string | null;
   _count: { employees: number; hiredEmployees: number; sapMappings: number };
 }
 
@@ -24,6 +25,18 @@ export default function AdminPage() {
   const [deleteTarget, setDeleteTarget] = useState<Site | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  function togglePassword(id: string) {
+    setVisiblePasswords((p) => ({ ...p, [id]: !p[id] }));
+  }
+
+  function copyPassword(id: string, pw: string) {
+    navigator.clipboard.writeText(pw);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }
 
   async function loadSites() {
     fetch("/api/admin/sites")
@@ -132,7 +145,7 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-6 shrink-0">
+                  <div className="flex items-center gap-4 shrink-0">
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <Users className="h-4 w-4" />
                       <span>{site._count.employees}</span>
@@ -143,7 +156,36 @@ export default function AdminPage() {
                     </div>
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <FileSpreadsheet className="h-4 w-4" />
-                      <span>{site._count.sapMappings} SAP codes</span>
+                      <span>{site._count.sapMappings}</span>
+                    </div>
+
+                    {/* Password display */}
+                    <div className="flex items-center gap-1 bg-muted rounded-lg px-2 py-1">
+                      <span className="text-xs text-muted-foreground mr-1 font-mono">PW:</span>
+                      <span className="font-mono text-xs min-w-[80px]">
+                        {site.plainPassword
+                          ? (visiblePasswords[site.id] ? site.plainPassword : "••••••••••")
+                          : <span className="text-muted-foreground italic">not set</span>
+                        }
+                      </span>
+                      {site.plainPassword && (
+                        <>
+                          <button
+                            className="text-muted-foreground hover:text-foreground p-0.5"
+                            onClick={() => togglePassword(site.id)}
+                            title={visiblePasswords[site.id] ? "Hide" : "Show"}
+                          >
+                            {visiblePasswords[site.id] ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                          <button
+                            className="text-muted-foreground hover:text-foreground p-0.5"
+                            onClick={() => copyPassword(site.id, site.plainPassword!)}
+                            title="Copy password"
+                          >
+                            {copiedId === site.id ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                          </button>
+                        </>
+                      )}
                     </div>
 
                     <Button
