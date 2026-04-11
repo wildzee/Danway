@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { upload } from "@vercel/blob/client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -214,18 +215,19 @@ export default function AttendancePage() {
         setIsImportingPunch(true);
 
         try {
-            const formData = new FormData();
-            formData.append("file", file);
-
-            const response = await fetch("/api/punch/upload", {
-                method: "POST",
-                body: formData,
+            // Step 1: Upload directly to Vercel Blob (bypasses 4.5MB function limit)
+            const blob = await upload(file.name, file, {
+                access: "public",
+                handleUploadUrl: "/api/punch/blob-token",
+                multipart: true,
             });
 
-            if (response.status === 413) {
-                toast.error("❌ File is too large. Please upload multiple smaller files (under 4.5MB).");
-                return;
-            }
+            // Step 2: Trigger server-side processing with just the blob URL
+            const response = await fetch("/api/punch/process", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+            });
 
             if (!response.ok) {
                 const text = await response.text();
