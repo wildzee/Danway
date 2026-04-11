@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, COOKIE_NAME } from "./lib/auth/session";
 
 // Paths that don't require authentication
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/logout", "/api/auth/debug"];
 
 // Paths that require admin role
 const ADMIN_PATHS = ["/admin"];
