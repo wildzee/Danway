@@ -11,12 +11,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Login ID and password are required" }, { status: 400 });
     }
 
-    const adminLoginId = process.env.ADMIN_LOGIN_ID ?? "admin";
-    const adminPasswordHash = process.env.ADMIN_PASSWORD_HASH ?? "";
+    const adminLoginId = (process.env.ADMIN_LOGIN_ID ?? "admin").trim();
+    const adminPassword = (process.env.ADMIN_PASSWORD ?? "").trim();
 
-    // Check admin credentials first
+    // Check admin credentials first (plain comparison — Vercel encrypts env vars at rest)
     if (loginId === adminLoginId) {
-      const valid = await verifyPassword(password, adminPasswordHash);
+      const valid = adminPassword.length > 0 && password === adminPassword;
       if (!valid) {
         return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
       }
