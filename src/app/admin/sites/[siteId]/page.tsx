@@ -69,6 +69,7 @@ export default function SiteDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   async function loadSite() {
     const r = await fetch(`/api/admin/sites/${siteId}`);
@@ -180,7 +181,7 @@ export default function SiteDetailPage() {
         <Button
           variant="destructive"
           size="sm"
-          onClick={() => { setDeleteError(""); setDeleteOpen(true); }}
+          onClick={() => { setDeleteError(""); setDeleteConfirm(""); setDeleteOpen(true); }}
         >
           <Trash2 className="h-4 w-4 mr-1.5" /> Delete Site
         </Button>
@@ -420,41 +421,43 @@ export default function SiteDetailPage() {
       </Dialog>
 
       {/* Delete site dialog */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog open={deleteOpen} onOpenChange={(o) => { setDeleteOpen(o); setDeleteConfirm(""); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Site</DialogTitle>
             <DialogDescription>
-              Permanently delete <strong>{site.code} — {site.name}</strong> and all its SAP code mappings.
-              This cannot be undone.
+              Permanently delete <strong>{site.code} — {site.name}</strong>. This will also delete all employees,
+              punch records, attendance records, hired workers, timesheets, and SAP codes for this site.
+              <strong className="text-destructive"> This cannot be undone.</strong>
             </DialogDescription>
           </DialogHeader>
-          {site._count.employees > 0 || site._count.hiredEmployees > 0 ? (
-            <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-              <p className="text-sm text-destructive">
-                This site has {site._count.employees} employee(s) and {site._count.hiredEmployees} hired worker(s).
-                Remove all employees first before deleting the site.
-              </p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <p className="text-sm text-amber-700 dark:text-amber-400">
-                SAP code mappings for this site will also be deleted.
-              </p>
-            </div>
-          )}
+          <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+            <p className="text-sm text-destructive">
+              {site._count.employees} employee(s) · {site._count.hiredEmployees} hired worker(s) · {site.sapMappings.length} SAP codes — all will be deleted.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="delete-confirm" className="text-sm">
+              Type <strong>{site.code}</strong> to confirm
+            </Label>
+            <Input
+              id="delete-confirm"
+              placeholder={site.code}
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+            />
+          </div>
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setDeleteOpen(false); setDeleteConfirm(""); }}>Cancel</Button>
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={deleteLoading || site._count.employees > 0 || site._count.hiredEmployees > 0}
+              disabled={deleteLoading || deleteConfirm !== site.code}
             >
               {deleteLoading && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              Delete Site
+              Delete Everything
             </Button>
           </DialogFooter>
         </DialogContent>

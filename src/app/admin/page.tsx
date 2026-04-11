@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -25,6 +27,7 @@ export default function AdminPage() {
   const [deleteTarget, setDeleteTarget] = useState<Site | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState("");
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -192,7 +195,7 @@ export default function AdminPage() {
                       variant="ghost"
                       size="sm"
                       className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => { setDeleteError(""); setDeleteTarget(site); }}
+                      onClick={() => { setDeleteError(""); setDeleteConfirm(""); setDeleteTarget(site); }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -210,42 +213,45 @@ export default function AdminPage() {
       )}
 
       {/* Delete confirm dialog */}
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirm(""); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Site</DialogTitle>
             <DialogDescription>
-              Permanently delete <strong>{deleteTarget?.code} — {deleteTarget?.name}</strong>.
-              This cannot be undone.
+              Permanently delete <strong>{deleteTarget?.code} — {deleteTarget?.name}</strong>. All employees,
+              attendance records, punch records, hired workers, timesheets, and SAP codes will be deleted.
+              <strong className="text-destructive"> This cannot be undone.</strong>
             </DialogDescription>
           </DialogHeader>
-          {deleteTarget && (deleteTarget._count.employees > 0 || deleteTarget._count.hiredEmployees > 0) ? (
+          {deleteTarget && (
             <div className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <p className="text-sm text-destructive">
-                This site has {deleteTarget._count.employees} employee(s) and {deleteTarget._count.hiredEmployees} hired worker(s).
-                Remove all employees first.
+                {deleteTarget._count.employees} employee(s) · {deleteTarget._count.hiredEmployees} hired worker(s) · {deleteTarget._count.sapMappings} SAP codes — all will be deleted.
               </p>
             </div>
-          ) : (
-            <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 rounded-lg">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <p className="text-sm text-amber-700 dark:text-amber-400">SAP code mappings will also be deleted.</p>
-            </div>
           )}
+          <div className="space-y-1.5">
+            <Label htmlFor="delete-confirm-list" className="text-sm">
+              Type <strong>{deleteTarget?.code}</strong> to confirm
+            </Label>
+            <Input
+              id="delete-confirm-list"
+              placeholder={deleteTarget?.code}
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+            />
+          </div>
           {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirm(""); }}>Cancel</Button>
             <Button
               variant="destructive"
               onClick={handleDelete}
-              disabled={
-                deleteLoading ||
-                (deleteTarget ? deleteTarget._count.employees > 0 || deleteTarget._count.hiredEmployees > 0 : false)
-              }
+              disabled={deleteLoading || deleteConfirm !== deleteTarget?.code}
             >
               {deleteLoading && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-              Delete Site
+              Delete Everything
             </Button>
           </DialogFooter>
         </DialogContent>

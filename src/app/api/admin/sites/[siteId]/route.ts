@@ -73,18 +73,43 @@ export async function DELETE(
 
   const { siteId } = await params;
 
-  const site = await prisma.site.findUnique({ where: { id: siteId } });
-  if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
+  try {
+    const site = await prisma.site.findUnique({ where: { id: siteId } });
+    if (!site) return NextResponse.json({ error: "Site not found" }, { status: 404 });
 
-  // Prevent deleting sites with employees
-  const empCount = await prisma.employee.count({ where: { siteId } });
-  if (empCount > 0) {
-    return NextResponse.json(
-      { error: "Cannot delete site with active employees" },
-      { status: 409 }
-    );
+    // Get employee and hired employee IDs for cascading deletes
+    const employees = await prisma.employee.findMany({ where: { siteId }, select: { id: true } });
+    const hiredEmployees = await prisma.hiredEmployee.findMany({ where: { siteId }, select: { id: true } });
+    const empIds = employees.map((e) => e.id);
+    const hiredIds = hiredEmployees.map((e) => e.id);
+
+    // Cascade delete everything in a transaction
+    await prisma.$transaction([
+      // Attendance records for employees
+      prisma.attendanceRecord.deleteMany({ where: { employeeId: { in: empIds } } }),
+      // Punch records for employees and hired employees
+      prisma.punchRecord.deleteMany({
+        where: {
+          OR: [
+            { employeeId: { in: empIds } },
+            { hiredEmployeeId: { in: hiredIds } },
+          ],
+        },
+      }),
+      // Hired timesheets
+      prisma.hiredTimesheet.deleteMany({ where: { hiredEmployeeId: { in: hiredIds } } }),
+      // Employees and hired employees
+      prisma.employee.deleteMany({ where: { siteId } }),
+      prisma.hiredEmployee.deleteMany({ where: { siteId } }),
+      // SAP code mappings
+      prisma.sAPCodeMapping.deleteMany({ where: { siteId } }),
+      // Finally the site itself
+      prisma.site.delete({ where: { id: siteId } }),
+    ]);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: "Failed to delete site", details: msg }, { status: 500 });
   }
-
-  await prisma.site.delete({ where: { id: siteId } });
-  return NextResponse.json({ success: true });
 }
