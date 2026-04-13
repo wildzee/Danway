@@ -98,12 +98,8 @@ export default function EmployeesPage() {
         fetchDesignations();
     }, []);
 
-    // Filter designations by selected employee type
-    const getAvailableDesignations = () => {
-        if (formData.isStaff === "true") return designations.filter(d => d.isEngineer);
-        if (formData.isStaff === "false") return designations.filter(d => !d.isEngineer);
-        return designations;
-    };
+    // Return all designations — one SAP code set covers both Staff and Workers
+    const getAvailableDesignations = () => designations;
 
     // Handle employee type change - reset designation when type changes
     const handleEmployeeTypeChange = (value: string) => {
