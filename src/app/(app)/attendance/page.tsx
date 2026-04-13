@@ -144,14 +144,14 @@ export default function AttendancePage() {
 
             // Combine data for display
             const combinedData: AttendanceData[] = allEmployees.map((emp: Employee) => {
-                const punch = punchRecords.find((p: any) => p.employee?.employeeId === emp.employeeId);
+                const punch = punchRecords.find((p: { employee?: { employeeId: string } }) => p.employee?.employeeId === emp.employeeId);
 
                 // Find attendance records for this employee
                 const normalRecord = attendanceRecords.find(
-                    (a: any) => a.employee?.employeeId === emp.employeeId && a.aaType === "0600"
+                    (a: { employee?: { employeeId: string }; aaType: string }) => a.employee?.employeeId === emp.employeeId && a.aaType === "0600"
                 );
                 const otRecord = attendanceRecords.find(
-                    (a: any) => a.employee?.employeeId === emp.employeeId && a.aaType === "0801"
+                    (a: { employee?: { employeeId: string }; aaType: string }) => a.employee?.employeeId === emp.employeeId && a.aaType === "0801"
                 );
 
                 let status = "Absent";
@@ -235,7 +235,7 @@ export default function AttendancePage() {
                 try {
                     const errorJson = JSON.parse(text);
                     errorMsg = errorJson.error || errorJson.details || errorMsg;
-                } catch (e) {
+                } catch {
                     errorMsg = `Server error: ${response.status} ${response.statusText}`;
                 }
                 toast.error(`❌ ${errorMsg}`);

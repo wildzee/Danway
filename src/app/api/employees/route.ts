@@ -64,6 +64,12 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        // Auto-link any punch records saved before this employee existed
+        await prisma.punchRecord.updateMany({
+            where: { rawUserId: employeeId, employeeId: null, hiredEmployeeId: null },
+            data: { employeeId: employee.id },
+        });
+
         return NextResponse.json({ success: true, message: 'Employee created successfully', data: employee });
     } catch (error) {
         console.error('Error creating employee:', error);

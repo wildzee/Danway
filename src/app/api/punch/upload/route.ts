@@ -92,10 +92,13 @@ export async function POST(request: NextRequest) {
                 OR: [
                     ...(employeeIds.length > 0 ? [{ employeeId: { in: employeeIds } }] : []),
                     ...(hiredEmployeeIds.length > 0 ? [{ hiredEmployeeId: { in: hiredEmployeeIds } }] : []),
+                    // Also include previously-saved unmatched records for these userIds
+                    { rawUserId: { in: allUserIds }, employeeId: null, hiredEmployeeId: null },
                 ],
             },
             select: {
                 id: true,
+                rawUserId: true,
                 employeeId: true,
                 hiredEmployeeId: true,
                 date: true,
@@ -106,12 +109,15 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        // Build lookup Map: "internalId-YYYY-MM-DD" → existing punch record
+        // Build lookup Map: "internalId-YYYY-MM-DD" or "raw-userId-YYYY-MM-DD" → existing punch record
         const existingPunchMap = new Map<string, typeof existingPunches[0]>();
         for (const p of existingPunches) {
             const dateStr = p.date.toISOString().split('T')[0];
-            const internalId = p.employeeId ?? p.hiredEmployeeId ?? '';
-            existingPunchMap.set(`${internalId}-${dateStr}`, p);
+            const internalId = p.employeeId ?? p.hiredEmployeeId ?? null;
+            const key = internalId
+                ? `${internalId}-${dateStr}`
+                : `raw-${p.rawUserId ?? ''}-${dateStr}`;
+            existingPunchMap.set(key, p);
         }
 
         // --- STEP 5: Categorise records into creates and updates ---
@@ -129,12 +135,13 @@ export async function POST(request: NextRequest) {
                     skippedEmployees.push(record.userId);
                 }
                 errorCount++;
-                continue;
+                // Don't skip — save with null IDs and rawUserId for deferred linking
             }
 
-            const internalId = employee ? employee.id : hiredEmployee!.id;
+            const internalId = employee ? employee.id : (hiredEmployee?.id ?? null);
             const dateStr = record.processDate.toISOString().split('T')[0];
-            const key = `${internalId}-${dateStr}`;
+            // For unmatched records, key by rawUserId so duplicates are still detected
+            const key = internalId ? `${internalId}-${dateStr}` : `raw-${record.userId}-${dateStr}`;
             const existing = existingPunchMap.get(key);
 
             if (existing) {
@@ -150,6 +157,7 @@ export async function POST(request: NextRequest) {
                 });
             } else {
                 toCreate.push({
+                    rawUserId: record.userId,
                     employeeId: employee?.id ?? null,
                     hiredEmployeeId: hiredEmployee?.id ?? null,
                     date: record.processDate,

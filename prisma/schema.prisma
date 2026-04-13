@@ -111,18 +111,21 @@ model PunchRecord {
   hiredEmployeeId String?
   hiredEmployee   HiredEmployee? @relation(fields: [hiredEmployeeId], references: [id], onDelete: Cascade)
   
+  rawUserId       String?   // original external ID from punch file (for deferred linking)
+
   date            DateTime  // Process date
   project         String?   // e.g., "DANWAY D657"
   punchIn     String?   // Time as string "07:02:59"
   punchOut    String?   // Time as string "17:27:50"
   workTime    String?   // Calculated "09:25"
   status      String    // PR, WO, AB
-  
+
   importBatchId   String  // Track which import batch
   createdAt       DateTime  @default(now())
-  
+
   @@index([employeeId, date])
   @@index([hiredEmployeeId, date])
+  @@index([rawUserId])
 }
 
 // Additional model for manual and calculated external timesheet data

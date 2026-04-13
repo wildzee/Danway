@@ -56,6 +56,12 @@ export async function POST(request: NextRequest) {
             include: { vendor: true },
         });
 
+        // Auto-link any punch records saved before this hired employee existed
+        await prisma.punchRecord.updateMany({
+            where: { rawUserId: employeeId, employeeId: null, hiredEmployeeId: null },
+            data: { hiredEmployeeId: newHiredEmployee.id },
+        });
+
         return NextResponse.json({ data: newHiredEmployee }, { status: 201 });
     } catch (error: any) {
         if (error?.code === 'P2002') {
