@@ -24,20 +24,28 @@ model Site {
   employees      Employee[]
   hiredEmployees HiredEmployee[]
   sapMappings    SAPCodeMapping[]
+  vendors        Vendor[]
 }
 
 // Vendors (Companies) for external hired manpower
 model Vendor {
   id                  String   @id @default(cuid())
-  name                String   @unique
+  name                String
   code                String?
   contactPerson       String?
   contactNumber       String?
   status              String   @default("active") // active/inactive
+
+  siteId              String   @default("")
+  site                Site     @relation(fields: [siteId], references: [id])
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
-  
+
   hiredEmployees      HiredEmployee[]
+
+  @@unique([siteId, name])
+  @@index([siteId])
 }
 
 // Hired Employees (External Manpower)

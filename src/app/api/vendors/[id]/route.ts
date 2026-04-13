@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth/api-auth";
 export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const result = await requireSession(request);
     if (result instanceof NextResponse) return result;
+    const { session } = result;
 
     try {
         const { id } = await context.params;
@@ -13,6 +14,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
         if (!id) {
             return NextResponse.json({ error: "Vendor ID is required" }, { status: 400 });
+        }
+
+        // Verify vendor belongs to this site
+        const vendor = await prisma.vendor.findFirst({ where: { id, siteId: session.siteId ?? "" } });
+        if (!vendor) {
+            return NextResponse.json({ error: "Company not found" }, { status: 404 });
         }
 
         const updatedVendor = await prisma.vendor.update({
@@ -45,6 +52,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const result = await requireSession(request);
     if (result instanceof NextResponse) return result;
+    const { session } = result;
 
     try {
         const { id } = await context.params;
@@ -53,23 +61,23 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
             return NextResponse.json({ error: "Vendor ID is required" }, { status: 400 });
         }
 
-        // Usually, we should handle if Vendor has restricted relation with employees, but Prisma configuration will throw an error if we try to delete a vendor with employees if `onDelete: Restrict` is set.
-        await prisma.vendor.delete({
-            where: { id },
-        });
+        // Verify vendor belongs to this site
+        const vendor = await prisma.vendor.findFirst({ where: { id, siteId: session.siteId ?? "" } });
+        if (!vendor) {
+            return NextResponse.json({ error: "Company not found" }, { status: 404 });
+        }
+
+        await prisma.vendor.delete({ where: { id } });
 
         return NextResponse.json({ success: true });
     } catch (error) {
         if (typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'P2003') {
             return NextResponse.json(
-                { error: "Cannot delete this company because there are employees assigned to it." },
+                { error: "Cannot delete this company because employees are assigned to it. Remove or reassign the employees first." },
                 { status: 409 }
             );
         }
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
-        return NextResponse.json(
-            { error: "Failed to delete vendor", details: errorMsg },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to delete vendor", details: errorMsg }, { status: 500 });
     }
 }

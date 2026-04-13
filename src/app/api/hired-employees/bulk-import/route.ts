@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         }
 
         const vendorIds = [...new Set<string>(body.records.map((r: any) => r.vendorId))];
-        const vendors = await prisma.vendor.findMany({ where: { id: { in: vendorIds } }, select: { id: true } });
+        const vendors = await prisma.vendor.findMany({ where: { id: { in: vendorIds }, siteId: session.siteId }, select: { id: true } });
         const validVendorIds = new Set(vendors.map(v => v.id));
 
         const allEmployeeIds = body.records.map((r: any) => r.employeeId).filter(Boolean);
