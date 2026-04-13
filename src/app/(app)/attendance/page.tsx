@@ -207,7 +207,33 @@ export default function AttendancePage() {
         }
     };
 
-    // Handle punch data import
+    // Show import result toast and trigger calculation
+    const handleImportResult = async (result: { data?: { processedCount?: number; skippedEmployees?: number; skippedEmployeeIds?: string[]; dateRange?: { start: string; end: string }; metrics?: { totalRowsInFile: number; validRowsParsed: number; invalidRowsSkipped: number } } }) => {
+        const skippedCount = result.data?.skippedEmployees || 0;
+        const skippedIds = result.data?.skippedEmployeeIds || [];
+
+        if (skippedCount > 0) {
+            const displayIds = skippedIds.slice(0, 5).join(', ');
+            const remaining = skippedCount > 5 ? ` and ${skippedCount - 5} more` : '';
+            toast.warning(
+                `⚠️ Imported ${result.data?.processedCount || 0} punch records. ${skippedCount} employees not yet in master data (will link when added): ${displayIds}${remaining}`
+            );
+        } else {
+            const dateRange = result.data?.dateRange;
+            const metrics = result.data?.metrics;
+            const rangeStr = dateRange?.start && dateRange?.end ? ` (${dateRange.start} to ${dateRange.end})` : '';
+            const metricStr = metrics
+                ? `\n📊 File: ${metrics.totalRowsInFile} rows. Parsed: ${metrics.validRowsParsed}. Skipped/Invalid: ${metrics.invalidRowsSkipped}.`
+                : '';
+            toast.success(`✅ Imported ${result.data?.processedCount || 0} punch records!${rangeStr}${metricStr}`);
+        }
+
+        if (result.data?.dateRange?.start && result.data?.dateRange?.end) {
+            await handleCalculate({ start: result.data.dateRange.start, end: result.data.dateRange.end });
+        }
+    };
+
+    // Handle punch data import — tries Vercel Blob (production), falls back to direct upload (local)
     const handlePunchImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -215,73 +241,49 @@ export default function AttendancePage() {
         setIsImportingPunch(true);
 
         try {
-            // Step 1: Upload directly to Vercel Blob (bypasses 4.5MB function limit)
-            const blob = await upload(file.name, file, {
-                access: "public",
-                handleUploadUrl: "/api/punch/blob-token",
-                multipart: true,
-            });
+            let result: { data?: { processedCount?: number; skippedEmployees?: number; skippedEmployeeIds?: string[]; dateRange?: { start: string; end: string }; metrics?: { totalRowsInFile: number; validRowsParsed: number; invalidRowsSkipped: number } } } | null = null;
 
-            // Step 2: Trigger server-side processing with just the blob URL
-            const response = await fetch("/api/punch/process", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
-            });
+            // Try Vercel Blob flow first (handles large files in production)
+            try {
+                const blob = await upload(file.name, file, {
+                    access: "public",
+                    handleUploadUrl: "/api/punch/blob-token",
+                    multipart: true,
+                });
 
-            if (!response.ok) {
-                const text = await response.text();
-                let errorMsg = "Import failed";
-                try {
-                    const errorJson = JSON.parse(text);
-                    errorMsg = errorJson.error || errorJson.details || errorMsg;
-                } catch {
-                    errorMsg = `Server error: ${response.status} ${response.statusText}`;
+                const response = await fetch("/api/punch/process", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
+                });
+
+                if (!response.ok) throw new Error(`process_failed:${response.status}`);
+                result = await response.json();
+            } catch {
+                // Blob flow failed (local dev / no internet) — fall back to direct upload
+                const formData = new FormData();
+                formData.append("file", file);
+
+                const response = await fetch("/api/punch/upload", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    let errorMsg = "Import failed";
+                    try { errorMsg = JSON.parse(text).error || errorMsg; } catch { /* ignore */ }
+                    toast.error(`❌ ${errorMsg}`);
+                    return;
                 }
-                toast.error(`❌ ${errorMsg}`);
-                return;
+                result = await response.json();
             }
 
-            const result = await response.json();
-
-                const skippedCount = result.data?.skippedEmployees || 0;
-                const skippedIds = result.data?.skippedEmployeeIds || [];
-
-                if (skippedCount > 0) {
-                    // Show only first 5 employee IDs to keep message short
-                    const displayIds = skippedIds.slice(0, 5).join(', ');
-                    const remaining = skippedCount > 5 ? ` and ${skippedCount - 5} more` : '';
-
-                    toast.warning(
-                        `⚠️ Imported ${result.data?.processedCount || 0} punch records. ${skippedCount} employees skipped (not in master data): ${displayIds}${remaining}`
-                    );
-                } else {
-                    const dateRange = result.data?.dateRange;
-                    const metrics = result.data?.metrics;
-
-                    const rangeStr = dateRange?.start && dateRange?.end
-                        ? ` (${dateRange.start} to ${dateRange.end})`
-                        : '';
-
-                    const metricStr = metrics
-                        ? `\n📊 File: ${metrics.totalRowsInFile} rows. Parsed: ${metrics.validRowsParsed}. Skipped/Invalid: ${metrics.invalidRowsSkipped}.`
-                        : '';
-
-                    toast.success(
-                        `✅ Imported ${result.data?.processedCount || 0} punch records!${rangeStr}${metricStr}`
-                    );
-                }
-
-                if (result.data?.dateRange?.start && result.data?.dateRange?.end) {
-                    await handleCalculate({
-                        start: result.data.dateRange.start,
-                        end: result.data.dateRange.end
-                    });
-                }
-            } catch (error) {
-                console.error("Import error:", error);
-                toast.error("❌ Failed to import punch data");
-            } finally {
+            if (result) await handleImportResult(result);
+        } catch (error) {
+            console.error("Import error:", error);
+            toast.error("❌ Failed to import punch data");
+        } finally {
             setIsImportingPunch(false);
             if (punchFileInputRef.current) {
                 punchFileInputRef.current.value = "";
