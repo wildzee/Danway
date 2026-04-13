@@ -24,7 +24,6 @@ model Site {
   employees      Employee[]
   hiredEmployees HiredEmployee[]
   sapMappings    SAPCodeMapping[]
-  vendors        Vendor[]
 }
 
 // Vendors (Companies) for external hired manpower
@@ -36,8 +35,7 @@ model Vendor {
   contactNumber       String?
   status              String   @default("active") // active/inactive
 
-  siteId              String   @default("")
-  site                Site     @relation(fields: [siteId], references: [id])
+  siteId              String   @default("") // scoped per site, no FK to avoid migration issues
 
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
