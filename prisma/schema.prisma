@@ -214,6 +214,7 @@ model SAPCodeMapping {
   network     String
   activity    String
   element     String
+  isEngineer  Boolean  @default(false)  // true = Staff designation, false = Worker
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

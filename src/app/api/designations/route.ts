@@ -8,10 +8,14 @@ export async function GET(request: NextRequest) {
     const { session } = result;
 
     try {
+        const { searchParams } = new URL(request.url);
+        const isEngineerParam = searchParams.get("isEngineer");
+        const typeFilter = isEngineerParam !== null ? { isEngineer: isEngineerParam === "true" } : {};
+
         const mappings = await prisma.sAPCodeMapping.findMany({
-            where: { siteId: session.siteId },
+            where: { siteId: session.siteId, ...typeFilter },
             orderBy: { designation: "asc" },
-            select: { designation: true, network: true, activity: true, element: true },
+            select: { designation: true, network: true, activity: true, element: true, isEngineer: true },
         });
 
         return NextResponse.json({ success: true, data: mappings });

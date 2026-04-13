@@ -59,6 +59,8 @@ export async function POST(
     const network = getField(row, ["network", "networknumber", "networkno"]);
     const activity = getField(row, ["activity", "activitynumber", "activityno"]);
     const element = getField(row, ["element", "elementnumber", "elementno", "wbselement"]);
+    const typeRaw = getField(row, ["type", "isstaff", "isengineer", "employeetype", "emptype"]);
+    const isEngineer = ["staff", "engineer", "true", "1", "yes"].includes(typeRaw.toLowerCase());
 
     if (!designation || !network || !activity || !element) {
       skipped++;
@@ -72,12 +74,12 @@ export async function POST(
     if (existing) {
       await prisma.sAPCodeMapping.update({
         where: { siteId_designation: { siteId, designation } },
-        data: { network, activity, element },
+        data: { network, activity, element, isEngineer },
       });
       updated++;
     } else {
       await prisma.sAPCodeMapping.create({
-        data: { siteId, designation, network, activity, element },
+        data: { siteId, designation, network, activity, element, isEngineer },
       });
       created++;
     }

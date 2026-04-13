@@ -28,6 +28,7 @@ interface DesignationMapping {
     network: string;
     activity: string;
     element: string;
+    isEngineer: boolean;
 }
 
 interface Employee {
@@ -97,8 +98,12 @@ export default function EmployeesPage() {
         fetchDesignations();
     }, []);
 
-    // Get available designations — all from the site's SAP mappings
-    const getAvailableDesignations = () => designations;
+    // Filter designations by selected employee type
+    const getAvailableDesignations = () => {
+        if (formData.isStaff === "true") return designations.filter(d => d.isEngineer);
+        if (formData.isStaff === "false") return designations.filter(d => !d.isEngineer);
+        return designations;
+    };
 
     // Handle employee type change - reset designation when type changes
     const handleEmployeeTypeChange = (value: string) => {
@@ -508,14 +513,10 @@ export default function EmployeesPage() {
                                     value={formData.designation}
                                     onValueChange={(value) => setFormData({ ...formData, designation: value })}
                                     required
-                                    disabled={!formData.isStaff}
+                                    disabled={getAvailableDesignations().length === 0}
                                 >
                                     <SelectTrigger>
-                                        <SelectValue placeholder={
-                                            !formData.isStaff
-                                                ? "Select employee type first"
-                                                : "Select designation"
-                                        } />
+                                        <SelectValue placeholder="Select designation" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {getAvailableDesignations().map((des) => (
