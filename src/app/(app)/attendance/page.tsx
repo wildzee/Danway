@@ -241,10 +241,14 @@ export default function AttendancePage() {
         setIsImportingPunch(true);
 
         try {
-            let result: { data?: { processedCount?: number; skippedEmployees?: number; skippedEmployeeIds?: string[]; dateRange?: { start: string; end: string }; metrics?: { totalRowsInFile: number; validRowsParsed: number; invalidRowsSkipped: number } } } | null = null;
+            type ImportResult = { data?: { processedCount?: number; skippedEmployees?: number; skippedEmployeeIds?: string[]; dateRange?: { start: string; end: string }; metrics?: { totalRowsInFile: number; validRowsParsed: number; invalidRowsSkipped: number } } };
+            let result: ImportResult | null = null;
 
-            // Try Vercel Blob flow first (handles large files in production)
-            try {
+            const isLocal = typeof window !== "undefined" &&
+                (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
+            if (!isLocal) {
+                // Production: use Vercel Blob to bypass 4.5 MB serverless limit
                 const blob = await upload(file.name, file, {
                     access: "public",
                     handleUploadUrl: "/api/punch/blob-token",
@@ -257,10 +261,16 @@ export default function AttendancePage() {
                     body: JSON.stringify({ blobUrl: blob.url, fileName: file.name }),
                 });
 
-                if (!response.ok) throw new Error(`process_failed:${response.status}`);
+                if (!response.ok) {
+                    const text = await response.text();
+                    let errorMsg = "Import failed";
+                    try { errorMsg = JSON.parse(text).error || errorMsg; } catch { /* ignore */ }
+                    toast.error(`❌ ${errorMsg}`);
+                    return;
+                }
                 result = await response.json();
-            } catch {
-                // Blob flow failed (local dev / no internet) — fall back to direct upload
+            } else {
+                // Local: direct upload — no size limit, no Vercel Blob needed
                 const formData = new FormData();
                 formData.append("file", file);
 
