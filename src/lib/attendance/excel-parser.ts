@@ -43,7 +43,7 @@ export async function parsePunchReport(
     try {
         const workbook = XLSX.read(fileBuffer, {
             type: 'buffer',
-            cellFormulas: false,
+            cellFormula: false,
             cellHTML: false,
             cellNF: false,
             sheetStubs: false,
