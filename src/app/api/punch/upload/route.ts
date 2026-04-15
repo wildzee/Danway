@@ -172,17 +172,19 @@ export async function POST(request: NextRequest) {
 
         // --- STEP 6: Execute all DB writes efficiently ---
         // Creates: one bulk insert
-        // Updates: run in parallel (each needs a unique id so updateMany won't work here)
-        const updatePromises = toUpdate.map(u =>
-            prisma.punchRecord.update({ where: { id: u.id }, data: u.data })
-        );
+        // Updates: chunked to avoid opening hundreds of simultaneous DB connections
+        if (toCreate.length > 0) {
+            await prisma.punchRecord.createMany({ data: toCreate });
+        }
 
-        await Promise.all([
-            toCreate.length > 0
-                ? prisma.punchRecord.createMany({ data: toCreate })
-                : Promise.resolve(),
-            ...updatePromises,
-        ]);
+        const CHUNK = 50;
+        for (let i = 0; i < toUpdate.length; i += CHUNK) {
+            await Promise.all(
+                toUpdate.slice(i, i + CHUNK).map(u =>
+                    prisma.punchRecord.update({ where: { id: u.id }, data: u.data })
+                )
+            );
+        }
 
         const processedCount = toCreate.length + toUpdate.length;
 

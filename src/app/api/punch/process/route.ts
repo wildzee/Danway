@@ -179,14 +179,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Execute all DB writes
-    const updatePromises = toUpdate.map((u) =>
-      prisma.punchRecord.update({ where: { id: u.id }, data: u.data })
-    );
+    if (toCreate.length > 0) {
+      await prisma.punchRecord.createMany({ data: toCreate });
+    }
 
-    await Promise.all([
-      toCreate.length > 0 ? prisma.punchRecord.createMany({ data: toCreate }) : Promise.resolve(),
-      ...updatePromises,
-    ]);
+    const CHUNK = 50;
+    for (let i = 0; i < toUpdate.length; i += CHUNK) {
+      await Promise.all(
+        toUpdate.slice(i, i + CHUNK).map((u) =>
+          prisma.punchRecord.update({ where: { id: u.id }, data: u.data })
+        )
+      );
+    }
 
     const processedCount = toCreate.length + toUpdate.length;
 
