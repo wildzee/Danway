@@ -41,7 +41,14 @@ export async function parsePunchReport(
     fileBuffer: Buffer
 ): Promise<{ records: PunchReportRow[], metrics: any }> {
     try {
-        const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+        const workbook = XLSX.read(fileBuffer, {
+            type: 'buffer',
+            cellFormulas: false,
+            cellHTML: false,
+            cellNF: false,
+            sheetStubs: false,
+            dense: true,
+        });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
 
