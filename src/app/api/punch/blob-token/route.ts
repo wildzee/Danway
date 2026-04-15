@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
         "application/octet-stream",
       ],
       maximumSizeInBytes: 50 * 1024 * 1024, // 50 MB
+      addRandomSuffix: true,
     }),
     onUploadCompleted: async () => {
       // Processing is triggered separately by the client via /api/punch/process
