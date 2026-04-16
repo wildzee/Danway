@@ -19,7 +19,7 @@ import {
     Loader2
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 
@@ -87,16 +87,27 @@ export default function ManpowerReportPage() {
 
             const allEmployees = [...danwayEmployees, ...hiredEmployees];
 
-            // 2. Fetch Punches for Date
+            // 2. Fetch Punches for selected date AND previous day (so night
+            // shifts starting on D-1 evening can be attributed to D).
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
-            const punchRes = await fetch(`/api/punch/records?date=${dateStr}`);
-            const punchData = await punchRes.json();
-            const dayPunches: PunchRecord[] = punchData.data || [];
+            const prevDateStr = format(subDays(selectedDate, 1), 'yyyy-MM-dd');
+            const [punchRes, prevPunchRes] = await Promise.all([
+                fetch(`/api/punch/records?date=${dateStr}`),
+                fetch(`/api/punch/records?date=${prevDateStr}`),
+            ]);
+            const [punchData, prevPunchData] = await Promise.all([
+                punchRes.json(),
+                prevPunchRes.json(),
+            ]);
+            const allPunches: PunchRecord[] = [
+                ...(punchData.data || []),
+                ...(prevPunchData.data || []),
+            ];
 
             setEmployees(allEmployees);
-            setPunches(dayPunches);
+            setPunches(allPunches);
 
-            processStats(allEmployees, dayPunches);
+            processStats(allEmployees, allPunches);
 
         } catch (error) {
             console.error("Error fetching report data:", error);
@@ -116,22 +127,54 @@ export default function ManpowerReportPage() {
         const dAbsents: Employee[] = [];
         const hAbsents: Employee[] = [];
 
+        const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+        const prevDateStr = format(subDays(selectedDate, 1), 'yyyy-MM-dd');
+
         emps.forEach(emp => {
             if (emp.status !== 'active') return;
 
-            // Check punch - now matching employeeId or hiredEmployeeId
-            // The API response for hiredEmployee punches has hiredEmployeeId populated
-            const punch = punches.find((p: any) => p.employeeId === emp.id || p.hiredEmployeeId === emp.id);
+            // All punches for this person across the selected date and
+            // the previous day (night-shift overflow window).
+            const empPunches = punches.filter(
+                (p: any) => p.employeeId === emp.id || p.hiredEmployeeId === emp.id
+            );
 
-            let shiftType = 'Absent';
+            const isNightEmployee = emp.shift?.toLowerCase().startsWith('night');
+            let shiftType: 'Day' | 'Night' | 'Absent' = 'Absent';
 
-            if (punch && punch.punchIn) {
-                const hour = parseInt(punch.punchIn.split(':')[0]);
-                if (hour >= 5 && hour < 17) {
-                    shiftType = 'Day';
-                } else {
-                    shiftType = 'Night';
+            for (const p of empPunches) {
+                if (!p.punchIn) continue;
+                const hour = parseInt(p.punchIn.split(':')[0]);
+                // PunchRecord.date arrives as an ISO string; compare its YYYY-MM-DD prefix.
+                const punchDateStr = typeof p.date === 'string'
+                    ? p.date.slice(0, 10)
+                    : format(new Date(p.date), 'yyyy-MM-dd');
+
+                // Night shift attributed to selected date D:
+                //   - punch on D-1 with punchIn 17:00-23:59, OR
+                //   - punch on D   with punchIn 00:00-04:59
+                // Requires employee is stored as Night shift (stricter match).
+                if (isNightEmployee) {
+                    const prevEveningNight =
+                        punchDateStr === prevDateStr && hour >= 17;
+                    const earlyMorningNight =
+                        punchDateStr === selectedDateStr && hour < 5;
+                    if (prevEveningNight || earlyMorningNight) {
+                        shiftType = 'Night';
+                        break;
+                    }
                 }
+
+                // Day shift: punch on D with punchIn 05:00-16:59.
+                if (
+                    punchDateStr === selectedDateStr &&
+                    hour >= 5 && hour < 17 &&
+                    shiftType === 'Absent'
+                ) {
+                    shiftType = 'Day';
+                }
+
+                // Punches on D with hour >= 17 belong to D+1 — dropped here.
             }
 
             const isHired = (emp as any).type === 'Hired';

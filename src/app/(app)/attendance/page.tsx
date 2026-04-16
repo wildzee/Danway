@@ -375,13 +375,24 @@ export default function AttendancePage() {
         }
     };
 
+    // Normalise shift value for display and filtering, tolerating DB typos
+    // like "Night Sift" and casing differences.
+    const normalizeShift = (shift: string): string => {
+        if (!shift) return 'Day Shift';
+        const lower = shift.toLowerCase();
+        if (lower.startsWith('night')) return 'Night Shift';
+        if (lower.includes('day') && lower.includes('night')) return 'Day & Night';
+        return 'Day Shift';
+    };
+
     // Filter data - use punchData for attendance view
     const filteredData = punchData.filter((data) => {
         const matchesSearch =
             data.employeeId.toLowerCase().includes(searchQuery.toLowerCase()) ||
             data.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             data.designation.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesShift = selectedShift === "all" || data.shift.toLowerCase() === selectedShift.toLowerCase();
+        const matchesShift = selectedShift === "all" ||
+            normalizeShift(data.shift).toLowerCase() === normalizeShift(selectedShift).toLowerCase();
         const matchesStatus = selectedStatus === "all" || data.status.toLowerCase() === selectedStatus.toLowerCase();
 
         return matchesSearch && matchesShift && matchesStatus;
@@ -612,16 +623,15 @@ export default function AttendancePage() {
                                         <TableCell className="font-medium text-sm truncate max-w-[150px]">{data.name}</TableCell>
                                         <TableCell className="text-xs truncate max-w-[130px]" title={data.designation}>{data.designation}</TableCell>
                                         <TableCell>
-                                            <Select defaultValue={data.shift || "Day shift"}>
-                                                <SelectTrigger className="h-8 w-[110px] text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Day shift">Day Shift</SelectItem>
-                                                    <SelectItem value="Night shift">Night Shift</SelectItem>
-                                                    <SelectItem value="Day&Night">Day & Night</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                normalizeShift(data.shift) === 'Night Shift'
+                                                    ? 'bg-slate-100 text-slate-700'
+                                                    : normalizeShift(data.shift) === 'Day & Night'
+                                                    ? 'bg-purple-100 text-purple-700'
+                                                    : 'bg-amber-100 text-amber-700'
+                                            }`}>
+                                                {normalizeShift(data.shift)}
+                                            </span>
                                         </TableCell>
                                         <TableCell className="font-mono text-xs">{data.punchIn || "--:--"}</TableCell>
                                         <TableCell className="font-mono text-xs">

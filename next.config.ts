@@ -6,8 +6,9 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   experimental: {
     serverActions: {
-      bodySizeLimit: '20mb',
+      bodySizeLimit: '50mb',
     },
+    proxyClientMaxBodySize: '50mb',
   },
 };
 

@@ -1,6 +1,6 @@
 # DanwayEME — Project Context
 
-**Updated**: 2026-04-13 (session 2)
+**Updated**: 2026-04-16 (session 3)
 
 UAE construction workforce management system. Two employee types: **Danway** (direct staff, SAP payroll) and **Hired** (subcontractors, monthly timesheets per vendor). Multi-site: each site has one timekeeper login; one super-admin manages all sites.
 
@@ -70,7 +70,7 @@ Processes `PunchRecord` → creates/replaces `AttendanceRecord` for Danway emplo
 #   localhost → POST /api/punch/upload (direct FormData, no size limit locally)
 #   production → Vercel Blob flow (bypasses 4.5 MB serverless limit)
 POST /api/punch/upload          → direct FormData upload; parses Excel, upserts PunchRecords (local dev)
-POST /api/punch/blob-token      → returns signed upload token; browser uploads directly to Vercel Blob (≤50 MB)
+POST /api/punch/blob-token      → returns signed upload token; browser uploads directly to Vercel Blob (≤50 MB); `proxyClientMaxBodySize: '50mb'` set in next.config.ts
 POST /api/punch/process         → { blobUrl, fileName } → downloads blob, parses Excel, upserts PunchRecords, deletes blob
 
 # Attendance
@@ -96,6 +96,20 @@ PATCH     /api/admin/sites/[siteId]             → action=reset-password | set-
 DELETE    /api/admin/sites/[siteId]             → cascade delete: attendanceRecords→punchRecords→hiredTimesheets→employees→hiredEmployees→SAPMappings→site
 POST      /api/admin/sites/[siteId]/sap-upload  → upsert SAPCodeMapping from Excel; reads optional `type`/`isstaff` column → isEngineer; returns { created, updated, skipped }
 ```
+
+---
+
+## Manpower Report — Night Shift Attribution
+
+The daily manpower report (`/manpower`) applies **end-day attribution**: a night shift belongs to the day it *ends*, not the day it starts.
+
+- `fetchData` fetches punch records for both `D` (selected date) and `D-1` in parallel, merges them.
+- A worker is classified as **Night Shift on D** when `emp.shift` starts with "night" (case-insensitive, tolerates DB typo "Night Sift") AND either:
+  - punch date = D-1, punchIn hour 17–23 (started previous evening), OR
+  - punch date = D, punchIn hour 0–4 (ended early morning of D).
+- Punches on D with punchIn ≥ 17:00 are dropped from D's report (attributed to D+1).
+
+All 8 night-shift employees have `shift = "Night Sift"` (DB typo). All night-shift checks use `toLowerCase().startsWith('night')`.
 
 ---
 
