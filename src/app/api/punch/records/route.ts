@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth/api-auth";
 
+// Prevent Next.js from caching this route in production builds
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
     const result = await requireSession(request);
     if (result instanceof NextResponse) return result;

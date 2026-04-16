@@ -92,8 +92,8 @@ export default function ManpowerReportPage() {
             const dateStr = format(selectedDate, 'yyyy-MM-dd');
             const prevDateStr = format(subDays(selectedDate, 1), 'yyyy-MM-dd');
             const [punchRes, prevPunchRes] = await Promise.all([
-                fetch(`/api/punch/records?date=${dateStr}`),
-                fetch(`/api/punch/records?date=${prevDateStr}`),
+                fetch(`/api/punch/records?date=${dateStr}`, { cache: 'no-store' }),
+                fetch(`/api/punch/records?date=${prevDateStr}`, { cache: 'no-store' }),
             ]);
             const [punchData, prevPunchData] = await Promise.all([
                 punchRes.json(),
