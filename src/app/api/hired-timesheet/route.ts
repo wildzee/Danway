@@ -190,6 +190,44 @@ export async function GET(request: NextRequest) {
     }
 }
 
+export async function DELETE(request: NextRequest) {
+    const result = await requireSession(request);
+    if (result instanceof NextResponse) return result;
+    const { session } = result;
+
+    try {
+        const { searchParams } = new URL(request.url);
+        const vendorId = searchParams.get('vendorId');
+        const monthStr = searchParams.get('month');
+
+        if (!vendorId || !monthStr) {
+            return NextResponse.json({ error: "vendorId and month are required" }, { status: 400 });
+        }
+
+        const [year, month] = monthStr.split('-').map(Number);
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59);
+
+        const hiredEmployees = await prisma.hiredEmployee.findMany({
+            where: { vendorId, ...(session.siteId ? { siteId: session.siteId } : {}) },
+            select: { id: true }
+        });
+        const employeeIds = hiredEmployees.map(e => e.id);
+
+        const { count } = await prisma.hiredTimesheet.deleteMany({
+            where: {
+                hiredEmployeeId: { in: employeeIds },
+                date: { gte: startDate, lte: endDate }
+            }
+        });
+
+        return NextResponse.json({ deleted: count });
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        return NextResponse.json({ error: "Failed to clear overrides", details: errorMsg }, { status: 500 });
+    }
+}
+
 export async function POST(request: NextRequest) {
     const result = await requireSession(request);
     if (result instanceof NextResponse) return result;

@@ -13,7 +13,8 @@ import {
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
-    ChevronDown
+    ChevronDown,
+    Calculator
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -69,12 +70,45 @@ export default function HiredTimesheet() {
 
     const [employees, setEmployees] = useState<EmployeeData[]>([]);
     const [loading, setLoading] = useState(false);
+    const [calculating, setCalculating] = useState(false);
 
     // Sort state
     type SortField = "employeeId" | "name" | "designation" | "totalHours";
     type SortDir = "asc" | "desc";
     const [sortField, setSortField] = useState<SortField>("employeeId");
     const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+    const fetchTimesheet = React.useCallback(async () => {
+        if (!selectedVendorId || !selectedMonth) return;
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/hired-timesheet?vendorId=${selectedVendorId}&month=${selectedMonth}`);
+            if (!res.ok) throw new Error("Failed to load");
+            const data = await res.json();
+            setEmployees(data.data || []);
+        } catch {
+            toast.error("Failed to load timesheet data");
+        } finally {
+            setLoading(false);
+        }
+    }, [selectedVendorId, selectedMonth]);
+
+    const handleCalculate = async () => {
+        if (!selectedVendorId || !selectedMonth) return;
+        setCalculating(true);
+        try {
+            const res = await fetch(`/api/hired-timesheet?vendorId=${selectedVendorId}&month=${selectedMonth}`, {
+                method: "DELETE"
+            });
+            if (!res.ok) throw new Error("Failed to reset");
+            await fetchTimesheet();
+            toast.success("Recalculated from punch data");
+        } catch {
+            toast.error("Failed to recalculate");
+        } finally {
+            setCalculating(false);
+        }
+    };
 
     // Initial load
     useEffect(() => {
@@ -88,29 +122,13 @@ export default function HiredTimesheet() {
                     }
                 }
             })
-            .catch(err => toast.error("Failed to load vendors"));
+            .catch(() => toast.error("Failed to load vendors"));
     }, []);
 
     // Fetch timesheet data when vendor or month changes
     useEffect(() => {
-        if (!selectedVendorId || !selectedMonth) return;
-
-        const fetchTimesheet = async () => {
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/hired-timesheet?vendorId=${selectedVendorId}&month=${selectedMonth}`);
-                if (!res.ok) throw new Error("Failed to load");
-                const data = await res.json();
-                setEmployees(data.data || []);
-            } catch (error) {
-                toast.error("Failed to load timesheet data");
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchTimesheet();
-    }, [selectedVendorId, selectedMonth]);
+    }, [fetchTimesheet]);
 
     const handleCellChange = async (empId: string, day: number, value: string) => {
         // Optimistic update with deep cloning for React to perfectly detect changes
@@ -260,6 +278,16 @@ export default function HiredTimesheet() {
                         <Info size={16} className="text-blue-600" />
                         <span className="text-xs font-medium text-blue-700">Displaying {sortedEmployees.length} Employees</span>
                     </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-9 gap-2"
+                        onClick={handleCalculate}
+                        disabled={calculating || loading || !selectedVendorId}
+                    >
+                        {calculating ? <Loader2 size={14} className="animate-spin" /> : <Calculator size={14} />}
+                        Calculate
+                    </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" size="sm" className="h-9 gap-2">
