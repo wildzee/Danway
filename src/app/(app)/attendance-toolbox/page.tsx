@@ -192,14 +192,14 @@ export default function AttendanceToolboxPage() {
         <>
             <style jsx global>{`
                 @media print {
-                    @page { margin: 20mm; size: A4 portrait; }
+                    @page { margin: 15mm; size: A4 portrait; }
                     * { box-sizing: border-box; }
-                    body, html { margin: 0 !important; padding: 0 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                    body, html { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background-color: white !important; }
                     .no-print { display: none !important; }
-                    .print-section { page-break-after: always; padding: 0; }
+                    .print-section { page-break-after: always; padding: 20px; }
                     .print-section:last-child { page-break-after: avoid; }
                     nav, header, aside { display: none !important; }
-                    .print-wrapper { display: block !important; margin: 0; padding: 0; }
+                    .print-wrapper { display: block !important; padding: 20px; }
                 }
             `}</style>
 
@@ -360,7 +360,7 @@ export default function AttendanceToolboxPage() {
             </div>
 
             {/* Print target */}
-            <div className="print-wrapper hidden print:block p-0">
+            <div className="print-wrapper hidden print:block">
                 {selected.length > 0 && <PrintSheet employees={selected} />}
             </div>
         </>
