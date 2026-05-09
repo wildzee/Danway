@@ -15,7 +15,8 @@ import {
     ChevronRight,
     ClipboardList,
     UserPlus,
-    Clock
+    Clock,
+    FileText
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { useSession } from "@/lib/auth/client-session";
 const menuItems = [
     { name: "Dashboard", href: "/", icon: LayoutDashboard },
     { name: "Attendance", href: "/attendance", icon: UserCheck },
+    { name: "Attendance Sheet", href: "/attendance-toolbox", icon: FileText },
     { name: "Extra Overtime", href: "/eot", icon: Clock },
     { name: "Manpower Report", href: "/manpower", icon: BarChart3 },
     { name: "Employee Management", href: "/employees", icon: Users },
