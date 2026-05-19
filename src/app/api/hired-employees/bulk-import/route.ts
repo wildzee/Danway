@@ -8,7 +8,8 @@ const rowSchema = z.object({
     name: z.string().min(1, "Name is required"),
     designation: z.string().min(1, "Designation is required"),
     shift: z.enum(["Day shift", "Night shift"]).catch("Day shift"),
-    vendorId: z.string().min(1, "Vendor ID is required"),
+    vendorId: z.string().optional(),
+    rawCompany: z.string().optional(),
     project: z.string().optional(),
 });
 
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: "No records provided" }, { status: 400 });
         }
 
-        const vendorIds = [...new Set<string>(body.records.map((r: any) => r.vendorId))];
+        const vendorIds = [...new Set<string>(body.records.map((r: any) => r.vendorId).filter(Boolean))];
         const vendors = await prisma.vendor.findMany({ where: { id: { in: vendorIds }, siteId: session.siteId }, select: { id: true } });
         const validVendorIds = new Set(vendors.map(v => v.id));
 
@@ -54,8 +55,35 @@ export async function POST(request: NextRequest) {
 
             const data = parsed.data;
 
-            if (!validVendorIds.has(data.vendorId)) {
-                results.push({ row, employeeId: data.employeeId, name: data.name, status: "error", reason: "Vendor not found" });
+            let finalVendorId = data.vendorId;
+
+            // Auto-create company if missing vendorId but rawCompany is present
+            if (!finalVendorId && data.rawCompany) {
+                let existingVendor = await prisma.vendor.findFirst({
+                    where: {
+                        siteId: session.siteId,
+                        name: data.rawCompany
+                    }
+                });
+
+                if (!existingVendor) {
+                    existingVendor = await prisma.vendor.create({
+                        data: {
+                            name: data.rawCompany,
+                            siteId: session.siteId
+                        }
+                    });
+                }
+                finalVendorId = existingVendor.id;
+            }
+
+            if (!finalVendorId) {
+                results.push({ row, employeeId: data.employeeId, name: data.name, status: "error", reason: "No company selected and no company name provided in file" });
+                continue;
+            }
+
+            if (data.vendorId && !validVendorIds.has(data.vendorId)) {
+                results.push({ row, employeeId: data.employeeId, name: data.name, status: "error", reason: "Company not found" });
                 continue;
             }
 
@@ -70,7 +98,7 @@ export async function POST(request: NextRequest) {
                 name: data.name,
                 designation: data.designation,
                 shift: data.shift,
-                vendorId: data.vendorId,
+                vendorId: finalVendorId,
                 siteId: session.siteId,
                 project: session.siteCode || "D657",
                 status: "active",

@@ -356,7 +356,7 @@ export default function HiredEmployeesPage() {
     };
 
     const handleBulkImport = async () => {
-        const invalid = importPreview.filter(r => !r.vendorId || !r.employeeId || !r.name);
+        const invalid = importPreview.filter(r => (!r.vendorId && !r.rawCompany) || !r.employeeId || !r.name);
         if (invalid.length > 0) {
             toast.error(`${invalid.length} row(s) are missing required fields or company assignment`);
             return;
@@ -803,8 +803,8 @@ export default function HiredEmployeesPage() {
                                                         <td className="px-3 py-1.5">
                                                             <div className="flex flex-col gap-0.5">
                                                                 {row.rawCompany && !row.vendorId && (
-                                                                    <span className="text-[10px] text-red-500 font-medium leading-tight" title="Name read from file — not matched to any company">
-                                                                        ⚠ "{row.rawCompany}"
+                                                                    <span className="text-[10px] text-amber-600 font-medium leading-tight" title="Company will be created automatically">
+                                                                        + "{row.rawCompany}" (New)
                                                                     </span>
                                                                 )}
                                                                 {row.rawCompany && row.vendorId && (
@@ -815,14 +815,14 @@ export default function HiredEmployeesPage() {
                                                                 <div className="flex items-center gap-1">
                                                                     {row.vendorId
                                                                         ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                                                                        : <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                                                                        : <Plus className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                                                                     }
                                                                     <select
-                                                                        className={`flex-1 border rounded px-1.5 py-0.5 text-xs ${!row.vendorId ? 'border-red-400 bg-red-50' : 'border-green-300 bg-green-50'}`}
+                                                                        className={`flex-1 border rounded px-1.5 py-0.5 text-xs ${!row.vendorId ? 'border-amber-400 bg-amber-50' : 'border-green-300 bg-green-50'}`}
                                                                         value={row.vendorId}
                                                                         onChange={e => updatePreviewRow(i, 'vendorId', e.target.value)}
                                                                     >
-                                                                        <option value="">— Select —</option>
+                                                                        <option value="">— Auto Create —</option>
                                                                         {vendors.map(v => (
                                                                             <option key={v.id} value={v.id}>{v.name}</option>
                                                                         ))}
